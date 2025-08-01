@@ -1,0 +1,161 @@
+# Terragon Autonomous SDLC Configuration
+# Adaptive value discovery and continuous improvement system
+
+metadata:
+  repository_name: "probneural-operator-lab"
+  maturity_level: "developing"  # nascent, developing, maturing, advanced
+  last_assessment: "2025-08-01T00:00:00Z"
+  primary_language: "python"
+  framework: "pytorch"
+  domain: "scientific-computing"
+
+# Scoring weights adapted for developing repositories
+scoring:
+  weights:
+    developing:
+      wsjf: 0.5      # Weighted Shortest Job First
+      ice: 0.2       # Impact Confidence Ease
+      technicalDebt: 0.2  # Technical debt reduction
+      security: 0.1   # Security improvements
+  
+  thresholds:
+    minScore: 15        # Minimum composite score to execute
+    maxRisk: 0.7        # Maximum risk threshold
+    securityBoost: 2.0  # Security vulnerability multiplier
+    complianceBoost: 1.8 # Compliance requirement multiplier
+
+# Value discovery sources and priorities
+discovery:
+  sources:
+    - gitHistory         # Parse commit messages, TODOs, FIXMEs
+    - staticAnalysis     # Code quality and complexity metrics  
+    - issueTrackers      # GitHub issues and PRs
+    - vulnerabilityDatabases # CVE and security advisory scanning
+    - dependencyAudits   # Package vulnerability scanning
+    - performanceMetrics # Performance regression detection
+  
+  tools:
+    staticAnalysis:
+      - ruff            # Python linting (already configured)
+      - mypy            # Type checking (already configured)
+      - bandit          # Security analysis
+      - safety          # Dependency vulnerability scanning
+    security:  
+      - pip-audit       # Python dependency scanning
+      - semgrep         # Static analysis security scanning
+      - gitleaks        # Secrets detection
+    performance:
+      - pytest-benchmark # Performance regression testing
+      - memory-profiler  # Memory usage monitoring
+
+# Autonomous execution configuration
+execution:
+  maxConcurrentTasks: 1
+  testRequirements:
+    minCoverage: 85        # Minimum test coverage
+    performanceRegression: 10  # Max % performance degradation
+    lintPassing: true      # All linting must pass
+  rollbackTriggers:
+    - testFailure
+    - buildFailure  
+    - securityViolation
+    - coverageRegression
+
+# SDLC enhancement priorities for developing repos
+enhancement_priorities:
+  high:
+    - ci_cd_workflows     # GitHub Actions automation
+    - security_scanning   # Automated vulnerability detection
+    - dependency_management # Dependabot/Renovate setup
+    - container_infrastructure # Docker and compose files
+    - advanced_testing    # Integration and performance tests
+  medium:
+    - release_automation  # Automated releases and changelogs
+    - performance_monitoring # Benchmarking and profiling
+    - documentation_automation # Auto-generated API docs
+    - code_quality_gates  # Quality metrics and enforcement
+  low:
+    - deployment_infrastructure # Production deployment configs
+    - monitoring_observability # Logging and metrics collection
+    - compliance_automation     # Regulatory and audit automation
+
+# Continuous learning and adaptation
+learning:
+  trackMetrics:
+    - estimationAccuracy    # How accurate are effort estimates
+    - valuePredictionAccuracy # How accurate are value predictions  
+    - falsePositiveRate     # Rate of incorrectly prioritized items
+    - cycleTime             # Time from discovery to completion
+    - userSatisfaction      # Feedback on completed improvements
+  
+  adaptationTriggers:
+    - estimationErrorThreshold: 0.3  # 30% estimation error triggers recalibration
+    - valuePredictionError: 0.25     # 25% value prediction error  
+    - falsePositiveThreshold: 0.15   # 15% false positive rate
+    - userFeedbackScore: 3.0         # Below 3/5 satisfaction score
+
+# Integration configurations
+integrations:
+  github:
+    enabled: true
+    autoAssignReviewers: true
+    useCodeowners: true
+    labelStrategy: "category-based"  # auto-label PRs by category
+  
+  notifications:
+    slack_webhook: ""  # Optional Slack integration
+    email_reports: true
+    frequency: "weekly"  # daily, weekly, monthly
+
+# Risk management
+risk_management:
+  maxChangesPerPR: 10      # Limit scope of autonomous changes
+  requireReviewFor:
+    - securityChanges      # Any security-related modifications
+    - dependencyUpdates    # Major version dependency updates  
+    - architectureChanges  # Structural or architectural changes
+    - testingChanges       # Modifications to test infrastructure
+  
+  rollbackProcedures:
+    automated: true        # Enable automatic rollback on failure
+    preserveHistory: true  # Keep history of failed attempts
+    notifyOnRollback: true # Alert on automatic rollbacks
+
+# Value tracking and metrics
+metrics:
+  track:
+    - repositoryMaturity   # Overall SDLC maturity score
+    - technicalDebtRatio   # Technical debt vs feature work ratio
+    - securityPosture      # Security improvement metrics
+    - developmentVelocity  # Feature delivery and improvement rate
+    - codeQualityTrends    # Code quality metric trends
+    - userEngagement       # Developer experience metrics
+  
+  reporting:
+    generateWeeklyReport: true
+    includeValueMetrics: true
+    includeRecommendations: true
+    exportFormat: ["markdown", "json"]  # Output formats
+
+# Custom rules and policies
+policies:
+  securityFirst: true     # Prioritize security fixes above all else
+  stabilityMaintenance: true # Don't break existing functionality
+  incrementalDelivery: true  # Deliver value in small increments
+  documentChanges: true   # All changes must include documentation
+  
+  customRules:
+    - name: "python_version_compatibility"
+      description: "Maintain compatibility with Python 3.9+"
+      pattern: "*.py"
+      enforcement: "error"
+    
+    - name: "test_coverage_maintenance"  
+      description: "Don't reduce overall test coverage"
+      threshold: "current_coverage - 5%"
+      enforcement: "warning"
+    
+    - name: "dependency_security"
+      description: "No dependencies with known high/critical vulnerabilities"
+      scanner: "pip-audit"
+      enforcement: "error"
