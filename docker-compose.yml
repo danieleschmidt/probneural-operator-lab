@@ -1,0 +1,233 @@
+# Docker Compose configuration for ProbNeural-Operator-Lab
+# Supports development, testing, and documentation workflows
+
+version: '3.8'
+
+services:
+  # Development environment
+  dev:
+    build:
+      context: .
+      target: development
+      dockerfile: Dockerfile
+    container_name: probneural-dev
+    volumes:
+      # Mount source code for live development
+      - .:/app
+      - pip-cache:/root/.cache/pip
+      # Preserve bash history
+      - bash-history:/root
+    environment:
+      - PYTHONPATH=/app
+      - ENVIRONMENT=development
+    ports:
+      - "8000:8000"    # Development server
+      - "8888:8888"    # Jupyter notebook
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+    networks:
+      - probneural-net
+
+  # Testing environment
+  test:
+    build:
+      context: .
+      target: testing
+      dockerfile: Dockerfile
+    container_name: probneural-test
+    volumes:
+      - .:/app
+      - test-reports:/app/reports
+    environment:
+      - PYTHONPATH=/app
+      - ENVIRONMENT=testing
+      - COVERAGE_FILE=/app/reports/.coverage
+    command: >
+      bash -c "
+        python -m pytest -v 
+        --cov=probneural_operator 
+        --cov-report=html:/app/reports/htmlcov 
+        --cov-report=xml:/app/reports/coverage.xml 
+        --junit-xml=/app/reports/junit.xml
+        tests/
+      "
+    depends_on:
+      - dev
+    networks:
+      - probneural-net
+
+  # Production environment
+  prod:
+    build:
+      context: .
+      target: production
+      dockerfile: Dockerfile
+    container_name: probneural-prod
+    environment:
+      - PYTHONPATH=/app
+      - ENVIRONMENT=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import probneural_operator; print('OK')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - probneural-net
+
+  # Documentation server
+  docs:
+    build:
+      context: .
+      target: docs
+      dockerfile: Dockerfile
+    container_name: probneural-docs
+    volumes:
+      - docs-build:/app/docs/_build
+    ports:
+      - "8080:8080"
+    environment:
+      - ENVIRONMENT=documentation
+    command: >
+      bash -c "
+        cd docs && make html &&
+        python -m http.server 8080 --directory _build/html
+      "
+    networks:
+      - probneural-net
+
+  # Jupyter notebook service
+  jupyter:
+    build:
+      context: .
+      target: development
+      dockerfile: Dockerfile
+    container_name: probneural-jupyter
+    volumes:
+      - .:/app
+      - jupyter-data:/root/.jupyter
+    ports:
+      - "8888:8888"
+    environment:
+      - PYTHONPATH=/app
+      - JUPYTER_ENABLE_LAB=yes
+    command: >
+      bash -c "
+        pip install jupyterlab &&
+        jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root 
+        --NotebookApp.token='' --NotebookApp.password=''
+      "
+    networks:
+      - probneural-net
+
+  # Code quality and security scanning
+  quality:
+    build:
+      context: .
+      target: development
+      dockerfile: Dockerfile
+    container_name: probneural-quality
+    volumes:
+      - .:/app
+      - quality-reports:/app/quality-reports
+    environment:
+      - PYTHONPATH=/app
+    command: >
+      bash -c "
+        mkdir -p quality-reports &&
+        echo 'Running code quality checks...' &&
+        
+        # Linting
+        ruff check probneural_operator tests --output-format=json > quality-reports/ruff-report.json ||
+        
+        # Type checking  
+        mypy probneural_operator --json-report quality-reports/mypy-report.json ||
+        
+        # Security scanning
+        bandit -r probneural_operator -f json -o quality-reports/bandit-report.json ||
+        
+        # Dependency security
+        pip-audit --format json --output quality-reports/pip-audit-report.json ||
+        
+        echo 'Quality checks complete. Reports in quality-reports/'
+      "
+    networks:
+      - probneural-net
+
+  # Performance benchmarking
+  benchmark:
+    build:
+      context: .
+      target: development
+      dockerfile: Dockerfile
+    container_name: probneural-benchmark
+    volumes:
+      - .:/app
+      - benchmark-results:/app/benchmark-results
+    environment:
+      - PYTHONPATH=/app
+    command: >
+      bash -c "
+        mkdir -p benchmark-results &&
+        echo 'Running performance benchmarks...' &&
+        python -m pytest tests/benchmarks/ 
+        --benchmark-json=benchmark-results/benchmark-results.json
+        --benchmark-histogram=benchmark-results/histogram ||
+        echo 'Benchmarks complete. Results in benchmark-results/'
+      "
+    networks:
+      - probneural-net
+
+  # Database for development (if needed in future)
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: probneural-postgres
+  #   environment:
+  #     POSTGRES_DB: probneural
+  #     POSTGRES_USER: probneural
+  #     POSTGRES_PASSWORD: probneural_dev_password
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   networks:
+  #     - probneural-net
+
+  # Redis for caching (if needed in future)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: probneural-redis
+  #   volumes:
+  #     - redis-data:/data
+  #   ports:
+  #     - "6379:6379"
+  #   networks:
+  #     - probneural-net
+
+# Named volumes for data persistence
+volumes:
+  pip-cache:
+    driver: local
+  bash-history:
+    driver: local
+  test-reports:
+    driver: local
+  docs-build:
+    driver: local
+  jupyter-data:
+    driver: local
+  quality-reports:
+    driver: local
+  benchmark-results:
+    driver: local
+  # postgres-data:
+  #   driver: local
+  # redis-data:
+  #   driver: local
+
+# Custom network
+networks:
+  probneural-net:
+    driver: bridge
