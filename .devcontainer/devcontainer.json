@@ -1,0 +1,96 @@
+{
+  "name": "ProbNeural Operator Lab Development",
+  "image": "pytorch/pytorch:2.0.0-cuda11.7-cudnn8-devel",
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "configureZshAsDefaultShell": true,
+      "installOhMyZsh": true
+    },
+    "ghcr.io/devcontainers/features/git:1": {
+      "ppa": true,
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {
+      "installDirectlyFromGitHubRelease": true,
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11",
+      "installTools": true
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/conda/bin/python",
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": false,
+        "python.linting.ruffEnabled": true,
+        "python.formatting.provider": "black",
+        "python.formatting.blackPath": "/opt/conda/bin/black",
+        "python.sortImports.path": "/opt/conda/bin/isort",
+        "python.testing.pytestEnabled": true,
+        "python.testing.pytestPath": "/opt/conda/bin/pytest",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.organizeImports": true
+        },
+        "files.associations": {
+          "*.toml": "toml"
+        }
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.black-formatter",
+        "ms-python.isort",
+        "charliermarsh.ruff",
+        "ms-toolsai.jupyter",
+        "ms-toolsai.jupyter-keymap",
+        "ms-toolsai.jupyter-renderers",
+        "ms-vscode.makefile-tools",
+        "redhat.vscode-yaml",
+        "tamasfe.even-better-toml",
+        "eamodio.gitlens",
+        "github.copilot",
+        "github.copilot-chat",
+        "ms-vscode.vscode-json"
+      ]
+    }
+  },
+  "remoteEnv": {
+    "PYTHONPATH": "/workspaces/probneural-operator-lab",
+    "CUDA_VISIBLE_DEVICES": "0"
+  },
+  "mounts": [
+    "source=${localWorkspaceFolder}/data,target=/workspaces/probneural-operator-lab/data,type=bind,consistency=cached",
+    "source=${localWorkspaceFolder}/models,target=/workspaces/probneural-operator-lab/models,type=bind,consistency=cached"
+  ],
+  "forwardPorts": [
+    8888,
+    6006,
+    8000
+  ],
+  "portsAttributes": {
+    "8888": {
+      "label": "Jupyter Lab",
+      "onAutoForward": "notify"
+    },
+    "6006": {
+      "label": "TensorBoard",
+      "onAutoForward": "notify"
+    },
+    "8000": {
+      "label": "Web API",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "postStartCommand": "git config --global --add safe.directory /workspaces/probneural-operator-lab",
+  "workspaceFolder": "/workspaces/probneural-operator-lab",
+  "runArgs": [
+    "--gpus=all",
+    "--shm-size=16gb"
+  ]
+}

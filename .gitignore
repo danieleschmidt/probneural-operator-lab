@@ -205,3 +205,78 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Scientific Computing & ML Specific
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.mat
+*.pkl
+*.pickle
+data/
+datasets/
+models/
+checkpoints/
+logs/
+wandb/
+mlruns/
+tensorboard/
+.wandb/
+
+# Neural Networks & Deep Learning
+*.pt
+*.pth
+*.safetensors
+*.onnx
+*.tflite
+*.pb
+
+# Jupyter Lab
+.jupyterlab-settings/
+.jupyter/
+
+# Experiment tracking
+experiments/
+results/
+outputs/
+figures/
+plots/
+
+# CUDA
+*.cubin
+*.fatbin
+*.ptx
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# IDE specific
+.idea/
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+.vscode/.ropeproject
+
+# Performance profiling
+*.prof
+*.profile
+
+# Large data files (use Git LFS instead)
+*.zip
+*.tar.gz
+*.rar
+*.7z

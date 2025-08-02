@@ -207,3 +207,44 @@ exclude_lines = [
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod"
 ]
+
+# Bandit security configuration
+[tool.bandit]
+exclude_dirs = ["tests", "docs", "scripts/terragon-discovery.py"]
+skips = ["B101", "B601"]  # Skip assert_used and shell=True (when justified)
+
+# Pydocstyle configuration
+[tool.pydocstyle]
+convention = "google"
+add_ignore = ["D100", "D104", "D213", "D203"]
+match_dir = "probneural_operator"
+
+# Additional development tools
+[tool.vulture]
+# Dead code detection
+paths = ["probneural_operator"]
+min_confidence = 60
+exclude = ["*_test.py", "*/tests/*"]
+
+# Import sorting with isort
+[tool.isort]
+src_paths = ["probneural_operator", "tests", "scripts"]
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+line_length = 88
+known_first_party = ["probneural_operator"]
+known_third_party = ["torch", "numpy", "scipy", "matplotlib", "sklearn"]
+
+# Documentation building
+[tool.sphinx]
+source-dir = "docs"
+build-dir = "docs/_build"
+
+# Performance profiling
+[tool.py-spy]
+duration = 60
+rate = 100
+output = "profile.svg"
