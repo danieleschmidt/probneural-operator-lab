@@ -1,0 +1,238 @@
+# Monitoring Configuration for ProbNeural Operator Lab
+
+# Logging Configuration
+logging:
+  level: INFO
+  console_output: true
+  file_output: true
+  json_output: false
+  log_dir: "logs"
+  performance_logging: true
+  
+  # Log rotation settings
+  max_file_size_mb: 10
+  backup_count: 5
+  
+  # Log levels for specific modules
+  module_levels:
+    probneural_operator: INFO
+    training: INFO
+    evaluation: INFO
+    uncertainty: INFO
+    performance: DEBUG
+
+# Metrics Collection
+metrics:
+  enabled: true
+  buffer_size: 10000
+  flush_interval: 60  # seconds
+  output_dir: "metrics"
+  
+  # System monitoring
+  system_monitoring:
+    enabled: true
+    interval: 5.0  # seconds
+    
+    # Thresholds for alerts
+    thresholds:
+      cpu_percent: 90.0
+      memory_percent: 85.0
+      disk_percent: 95.0
+      gpu_memory_percent: 90.0
+  
+  # Experiment tracking
+  experiment_tracking:
+    enabled: true
+    auto_save_interval: 300  # seconds
+    save_dir: "experiments"
+
+# Health Checks
+health_checks:
+  enabled: true
+  monitoring_interval: 60.0  # seconds
+  
+  # Individual health check configurations
+  checks:
+    system_resources:
+      enabled: true
+      interval: 30.0
+      timeout: 10.0
+      thresholds:
+        cpu_threshold: 90.0
+        memory_threshold: 90.0
+        disk_threshold: 95.0
+    
+    gpu_health:
+      enabled: true
+      interval: 30.0
+      timeout: 10.0
+      memory_threshold: 90.0
+    
+    storage_health:
+      enabled: true
+      interval: 120.0
+      timeout: 30.0
+      min_free_space_gb: 1.0
+      required_paths:
+        - "logs"
+        - "data"
+        - "models"
+        - "metrics"
+        - "experiments"
+    
+    model_health:
+      enabled: false  # Requires model factory configuration
+      interval: 300.0
+      timeout: 60.0
+    
+    data_health:
+      enabled: false  # Requires data loader factory configuration
+      interval: 300.0
+      timeout: 120.0
+
+# Dashboard Configuration
+dashboard:
+  enabled: true
+  type: "flask"  # Currently only flask supported
+  host: "0.0.0.0"
+  port: 8050
+  debug: false
+  auto_refresh_interval: 30  # seconds
+  
+  # Plot configurations
+  plots:
+    system_metrics:
+      enabled: true
+      time_window_hours: 1
+    
+    gpu_metrics:
+      enabled: true
+      time_window_hours: 1
+    
+    experiment_metrics:
+      enabled: true
+      time_window_hours: 24
+
+# Alerting (for future implementation)
+alerting:
+  enabled: false
+  channels:
+    email:
+      enabled: false
+      smtp_server: ""
+      smtp_port: 587
+      username: ""
+      password: ""
+      recipients: []
+    
+    slack:
+      enabled: false
+      webhook_url: ""
+      channel: "#monitoring"
+    
+    webhook:
+      enabled: false
+      url: ""
+      timeout: 30.0
+  
+  # Alert rules
+  rules:
+    critical_system_resources:
+      condition: "system.cpu.percent > 95 OR system.memory.percent > 95"
+      severity: "critical"
+      cooldown: 300  # seconds
+    
+    gpu_memory_high:
+      condition: "gpu.memory.percent > 90"
+      severity: "warning"
+      cooldown: 180
+    
+    experiment_failed:
+      condition: "experiment.status == 'failed'"
+      severity: "warning"
+      cooldown: 0
+
+# Data Retention
+retention:
+  metrics:
+    default_days: 30
+    high_frequency_days: 7  # High frequency metrics (< 1min interval)
+    aggregated_days: 365   # Aggregated/summary metrics
+  
+  logs:
+    default_days: 30
+    error_logs_days: 90
+    performance_logs_days: 7
+  
+  health_checks:
+    default_days: 30
+    critical_events_days: 90
+  
+  experiments:
+    default_days: 365  # Keep experiment data longer
+    failed_experiments_days: 90
+
+# Performance Optimizations
+performance:
+  metrics_collection:
+    batch_size: 100
+    async_processing: true
+    compression: false
+  
+  health_checks:
+    parallel_execution: true
+    max_concurrent: 5
+  
+  dashboard:
+    cache_duration: 10  # seconds
+    max_data_points: 1000
+    data_sampling: true
+
+# Development/Testing Settings
+development:
+  mock_gpu_metrics: false
+  mock_experiments: false
+  reduced_intervals: false  # Use shorter intervals for testing
+  verbose_logging: true
+
+# Security (for future implementation)
+security:
+  dashboard_auth:
+    enabled: false
+    method: "basic"  # basic, token, oauth
+    users: {}
+  
+  api_keys:
+    enabled: false
+    keys: []
+  
+  ssl:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+
+# Integration Settings
+integrations:
+  prometheus:
+    enabled: false
+    port: 9090
+    metrics_path: "/metrics"
+  
+  grafana:
+    enabled: false
+    dashboard_import: false
+  
+  elasticsearch:
+    enabled: false
+    host: "localhost"
+    port: 9200
+    index_prefix: "probneural"
+  
+  mlflow:
+    enabled: false
+    tracking_uri: ""
+  
+  wandb:
+    enabled: false
+    project: "probneural-operator-lab"
+    entity: ""
