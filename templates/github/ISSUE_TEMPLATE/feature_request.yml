@@ -1,0 +1,158 @@
+name: ✨ Feature Request
+description: Suggest a new feature or enhancement
+title: "[Feature]: "
+labels: ["type/feature", "status/triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! Please provide detailed information to help us understand your request.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Feature Summary
+      description: A clear and concise description of the feature you'd like to see
+      placeholder: Briefly describe the feature...
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation and Use Case
+      description: Why is this feature needed? What problem does it solve?
+      placeholder: |
+        Describe the problem or limitation you're facing...
+        - What are you trying to accomplish?
+        - How would this feature help you?
+        - Are there any workarounds you're currently using?
+    validations:
+      required: true
+
+  - type: textarea
+    id: detailed_description
+    attributes:
+      label: Detailed Description
+      description: Provide a detailed description of the proposed feature
+      placeholder: |
+        Describe the feature in detail:
+        - How should it work?
+        - What should the API look like?
+        - Are there any specific requirements?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_api
+    attributes:
+      label: Proposed API/Interface
+      description: If applicable, provide a proposed API or interface design
+      render: python
+      placeholder: |
+        # Example API design
+        from probneural_operator import NewFeature
+        
+        # How users would interact with this feature
+        feature = NewFeature(param1="value1")
+        result = feature.method()
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What alternative solutions or features have you considered?
+      placeholder: |
+        - Alternative approach 1: ...
+        - Alternative approach 2: ...
+        - Why the proposed solution is better...
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Critical (blocking current work)
+        - High (would significantly improve workflow)
+        - Medium (would be helpful but not urgent)
+        - Low (nice to have)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feature Category
+      description: Which area does this feature relate to?
+      options:
+        - Neural Operators (FNO, DeepONet, etc.)
+        - Uncertainty Quantification
+        - Active Learning
+        - Data Processing
+        - Visualization
+        - Performance/Optimization
+        - Documentation
+        - Testing
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation_notes
+    attributes:
+      label: Implementation Notes
+      description: Any thoughts on how this could be implemented?
+      placeholder: |
+        - Potential challenges
+        - Dependencies that might be needed
+        - Integration points with existing code
+        - Performance considerations
+    validations:
+      required: false
+
+  - type: textarea
+    id: related_work
+    attributes:
+      label: Related Work/References
+      description: Links to papers, other implementations, or related work
+      placeholder: |
+        - Research papers: ...
+        - Other libraries: ...
+        - Documentation: ...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Are you willing to contribute to this feature?
+      options:
+        - label: I am willing to implement this feature myself
+          required: false
+        - label: I can help with testing the feature
+          required: false
+        - label: I can help with documentation
+          required: false
+        - label: I can provide domain expertise/feedback
+          required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched for existing issues/features that might be related
+          required: true
+        - label: I have provided a clear description of the proposed feature
+          required: true
+        - label: I have explained the motivation and use case
+          required: true
+        - label: I understand this is a feature request and not a support question
+          required: true
