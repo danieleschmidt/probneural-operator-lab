@@ -1,0 +1,138 @@
+name: ❓ Question
+description: Ask a question about usage, concepts, or getting help
+title: "[Question]: "
+labels: ["type/question", "status/triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for your question! Please provide as much context as possible to help us give you the best answer.
+        
+        **Note:** For general support and community discussions, consider using our [GitHub Discussions](https://github.com/danieleschmidt/probneural-operator-lab/discussions) instead.
+
+  - type: dropdown
+    id: question_type
+    attributes:
+      label: Question Type
+      description: What type of question is this?
+      options:
+        - How to use a specific feature
+        - Understanding concepts/theory
+        - Installation/setup help
+        - Performance/optimization
+        - Best practices
+        - Integration with other tools
+        - Troubleshooting
+        - General usage
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: Ask your question clearly and concisely
+      placeholder: What would you like to know?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context and Background
+      description: Provide context about what you're trying to accomplish
+      placeholder: |
+        - What are you working on?
+        - What have you tried so far?
+        - What's your end goal?
+        - Any relevant background information?
+    validations:
+      required: true
+
+  - type: textarea
+    id: code_attempt
+    attributes:
+      label: Code You've Tried (if applicable)
+      description: Share any code you've attempted
+      render: python
+      placeholder: |
+        # Your code attempt
+        import probneural_operator
+        
+        # What you've tried...
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected_outcome
+    attributes:
+      label: Expected Outcome
+      description: What result or behavior are you expecting?
+      placeholder: Describe what you expect to happen...
+    validations:
+      required: false
+
+  - type: textarea
+    id: current_outcome
+    attributes:
+      label: Current Outcome
+      description: What's currently happening instead?
+      placeholder: Describe what's currently happening...
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment (if relevant)
+      description: Provide environment details if they might be relevant to your question
+      render: text
+      placeholder: |
+        - OS: [e.g., Ubuntu 20.04, Windows 10, macOS 12.0]
+        - Python version: [e.g., 3.9.7]
+        - ProbNeural Operator version: [e.g., 0.1.0]
+        - PyTorch version: [e.g., 1.12.0]
+        - Other relevant packages: [e.g., numpy 1.21.0]
+    validations:
+      required: false
+
+  - type: textarea
+    id: research_done
+    attributes:
+      label: Research Done
+      description: What have you already looked at or tried?
+      placeholder: |
+        - Documentation sections you've read
+        - Similar issues or discussions you've found
+        - External resources you've consulted
+        - Experiments you've attempted
+    validations:
+      required: false
+
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: Urgency
+      description: How urgent is this question for you?
+      options:
+        - Low (general curiosity)
+        - Medium (would help with current project)
+        - High (blocking current work)
+        - Critical (urgent deadline)
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched existing issues and discussions for similar questions
+          required: true
+        - label: I have provided sufficient context for my question
+          required: true
+        - label: I understand this is for questions about the project, not general Python/ML help
+          required: true
+        - label: I am willing to provide additional information if needed
+          required: true

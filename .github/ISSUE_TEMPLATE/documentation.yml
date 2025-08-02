@@ -1,0 +1,148 @@
+name: 📚 Documentation
+description: Report issues with documentation or suggest improvements
+title: "[Docs]: "
+labels: ["type/docs", "status/triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve our documentation! Clear documentation is crucial for user experience.
+
+  - type: dropdown
+    id: doc_type
+    attributes:
+      label: Documentation Type
+      description: What type of documentation issue is this?
+      options:
+        - Missing documentation
+        - Incorrect/outdated information
+        - Unclear/confusing content
+        - Typo/grammar issue
+        - Code example not working
+        - API documentation issue
+        - Tutorial/guide improvement
+        - New documentation needed
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: Documentation Location
+      description: Where is the documentation issue located?
+      placeholder: |
+        - File path: docs/user_guide/getting_started.md
+        - URL: https://probneural-operator-lab.readthedocs.io/...
+        - Section: "Installation" section
+        - Line numbers: lines 25-30
+    validations:
+      required: true
+
+  - type: textarea
+    id: current_content
+    attributes:
+      label: Current Content (if applicable)
+      description: Copy the current problematic content
+      render: markdown
+      placeholder: |
+        Copy the current text/code that has issues...
+    validations:
+      required: false
+
+  - type: textarea
+    id: issue_description
+    attributes:
+      label: Issue Description
+      description: Describe the problem with the current documentation
+      placeholder: |
+        What's wrong with the current documentation?
+        - Is information missing?
+        - Is something incorrect?
+        - Is it confusing?
+        - Does a code example not work?
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggested_improvement
+    attributes:
+      label: Suggested Improvement
+      description: How should the documentation be improved?
+      render: markdown
+      placeholder: |
+        Provide your suggested changes:
+        - Corrected text
+        - Additional information that should be included
+        - Better examples
+        - Reorganization suggestions
+    validations:
+      required: false
+
+  - type: textarea
+    id: code_example
+    attributes:
+      label: Working Code Example (if applicable)
+      description: If reporting a broken code example, provide a working version
+      render: python
+      placeholder: |
+        # Working code example
+        import probneural_operator
+        
+        # Your corrected example here
+    validations:
+      required: false
+
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Target Audience
+      description: Who is the primary audience for this documentation?
+      options:
+        - New users/beginners
+        - Experienced users
+        - Developers/contributors
+        - Researchers
+        - All users
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any additional context that might be helpful
+      placeholder: |
+        - Related documentation sections
+        - User feedback you've received
+        - Links to discussions or issues
+        - Screenshots (if applicable)
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Are you willing to help improve this documentation?
+      options:
+        - label: I can write the improved documentation
+          required: false
+        - label: I can review proposed changes
+          required: false
+        - label: I can provide feedback on drafts
+          required: false
+        - label: I can help with proofreading
+          required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: Please confirm the following
+      options:
+        - label: I have checked that this documentation issue hasn't been reported before
+          required: true
+        - label: I have provided specific location information
+          required: true
+        - label: I have clearly described the issue
+          required: true
