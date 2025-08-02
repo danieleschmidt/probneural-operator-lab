@@ -1,233 +1,471 @@
 # Docker Compose configuration for ProbNeural-Operator-Lab
-# Supports development, testing, and documentation workflows
+# Supports development, testing, production, and documentation workflows
 
 version: '3.8'
+
+# Common environment variables
+x-common-variables: &common-variables
+  PYTHONPATH: /app
+  TZ: UTC
+  PYTHONUNBUFFERED: 1
+
+# Common build configuration
+x-common-build: &common-build
+  context: .
+  dockerfile: Dockerfile
+  args:
+    PYTHON_VERSION: ${PYTHON_VERSION:-3.11}
+    PYTORCH_VERSION: ${PYTORCH_VERSION:-2.0.0}
+    CUDA_VERSION: ${CUDA_VERSION:-11.7}
 
 services:
   # Development environment
   dev:
     build:
-      context: .
+      <<: *common-build
       target: development
-      dockerfile: Dockerfile
     container_name: probneural-dev
     volumes:
       # Mount source code for live development
       - .:/app
-      - pip-cache:/root/.cache/pip
-      # Preserve bash history
-      - bash-history:/root
+      - pip-cache:/home/probneural/.cache/pip
+      - bash-history:/home/probneural
+      - dev-data:/app/data
+      - dev-models:/app/models
+      - dev-logs:/app/logs
+      - dev-results:/app/results
     environment:
-      - PYTHONPATH=/app
-      - ENVIRONMENT=development
+      <<: *common-variables
+      ENVIRONMENT: development
+      DEBUG: true
+      LOG_LEVEL: DEBUG
     ports:
-      - "8000:8000"    # Development server
-      - "8888:8888"    # Jupyter notebook
+      - "${DEV_PORT:-8000}:8000"      # Development server
+      - "${JUPYTER_PORT:-8888}:8888"  # Jupyter notebook
+      - "${TENSORBOARD_PORT:-6006}:6006"  # TensorBoard
     stdin_open: true
     tty: true
     command: /bin/bash
     networks:
       - probneural-net
+    profiles:
+      - dev
+      - all
+
+  # CUDA Development environment
+  dev-cuda:
+    build:
+      <<: *common-build
+      target: cuda
+    container_name: probneural-dev-cuda
+    runtime: nvidia
+    environment:
+      <<: *common-variables
+      ENVIRONMENT: development
+      DEBUG: true
+      LOG_LEVEL: DEBUG
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    volumes:
+      - .:/app
+      - pip-cache-cuda:/home/probneural/.cache/pip
+      - bash-history-cuda:/home/probneural
+      - dev-data:/app/data
+      - dev-models:/app/models
+      - dev-logs:/app/logs
+      - dev-results:/app/results
+    ports:
+      - "${DEV_CUDA_PORT:-8001}:8000"
+      - "${JUPYTER_CUDA_PORT:-8889}:8888"
+      - "${TENSORBOARD_CUDA_PORT:-6007}:6006"
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+    networks:
+      - probneural-net
+    profiles:
+      - cuda
+      - dev-cuda
 
   # Testing environment
   test:
     build:
-      context: .
+      <<: *common-build
       target: testing
-      dockerfile: Dockerfile
     container_name: probneural-test
     volumes:
       - .:/app
-      - test-reports:/app/reports
+      - test-reports:/app/test-results
+      - test-coverage:/app/coverage
     environment:
-      - PYTHONPATH=/app
-      - ENVIRONMENT=testing
-      - COVERAGE_FILE=/app/reports/.coverage
+      <<: *common-variables
+      ENVIRONMENT: testing
+      COVERAGE_FILE: /app/coverage/.coverage
     command: >
       bash -c "
+        echo 'Running comprehensive test suite...' &&
         python -m pytest -v 
-        --cov=probneural_operator 
-        --cov-report=html:/app/reports/htmlcov 
-        --cov-report=xml:/app/reports/coverage.xml 
-        --junit-xml=/app/reports/junit.xml
-        tests/
+          --cov=probneural_operator 
+          --cov-report=html:/app/coverage/htmlcov 
+          --cov-report=xml:/app/coverage/coverage.xml 
+          --cov-report=term-missing
+          --junitxml=/app/test-results/junit.xml
+          tests/
       "
-    depends_on:
-      - dev
     networks:
       - probneural-net
+    profiles:
+      - test
+      - all
 
   # Production environment
   prod:
     build:
-      context: .
+      <<: *common-build
       target: production
-      dockerfile: Dockerfile
     container_name: probneural-prod
     environment:
-      - PYTHONPATH=/app
-      - ENVIRONMENT=production
+      <<: *common-variables
+      ENVIRONMENT: production
+      LOG_LEVEL: INFO
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import probneural_operator; print('OK')"]
+      test: ["CMD", "python", "-c", "import probneural_operator; print('Production ready')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
     networks:
       - probneural-net
+    profiles:
+      - prod
+      - production
 
   # Documentation server
   docs:
     build:
-      context: .
+      <<: *common-build
       target: docs
-      dockerfile: Dockerfile
     container_name: probneural-docs
     volumes:
       - docs-build:/app/docs/_build
     ports:
-      - "8080:8080"
+      - "${DOCS_PORT:-8080}:8080"
     environment:
-      - ENVIRONMENT=documentation
-    command: >
-      bash -c "
-        cd docs && make html &&
-        python -m http.server 8080 --directory _build/html
-      "
+      <<: *common-variables
+      ENVIRONMENT: documentation
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - probneural-net
+    profiles:
+      - docs
+      - all
 
-  # Jupyter notebook service
+  # Jupyter Lab service
   jupyter:
     build:
-      context: .
+      <<: *common-build
       target: development
-      dockerfile: Dockerfile
     container_name: probneural-jupyter
     volumes:
       - .:/app
-      - jupyter-data:/root/.jupyter
+      - jupyter-data:/home/probneural/.jupyter
+      - notebooks:/app/notebooks
     ports:
-      - "8888:8888"
+      - "${JUPYTER_LAB_PORT:-8890}:8888"
     environment:
-      - PYTHONPATH=/app
-      - JUPYTER_ENABLE_LAB=yes
+      <<: *common-variables
+      JUPYTER_ENABLE_LAB: yes
     command: >
       bash -c "
-        pip install jupyterlab &&
+        pip install jupyterlab ipywidgets &&
         jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root 
-        --NotebookApp.token='' --NotebookApp.password=''
+          --ServerApp.token='' --ServerApp.password=''
+          --ServerApp.allow_origin='*'
+          --ServerApp.allow_remote_access=True
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/lab"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - probneural-net
+    profiles:
+      - jupyter
+      - dev
+      - all
+
+  # TensorBoard service
+  tensorboard:
+    build:
+      <<: *common-build
+      target: development
+    container_name: probneural-tensorboard
+    volumes:
+      - dev-logs:/app/logs
+      - tensorboard-logs:/app/tensorboard
+    ports:
+      - "${TENSORBOARD_STANDALONE_PORT:-6008}:6006"
+    environment:
+      <<: *common-variables
+    command: >
+      bash -c "
+        pip install tensorboard &&
+        tensorboard --logdir=/app/logs/tensorboard --host=0.0.0.0 --port=6006
       "
     networks:
       - probneural-net
+    profiles:
+      - tensorboard
+      - monitoring
 
   # Code quality and security scanning
   quality:
     build:
-      context: .
+      <<: *common-build
       target: development
-      dockerfile: Dockerfile
     container_name: probneural-quality
     volumes:
       - .:/app
       - quality-reports:/app/quality-reports
     environment:
-      - PYTHONPATH=/app
+      <<: *common-variables
     command: >
       bash -c "
         mkdir -p quality-reports &&
-        echo 'Running code quality checks...' &&
+        echo 'Running comprehensive code quality checks...' &&
         
-        # Linting
-        ruff check probneural_operator tests --output-format=json > quality-reports/ruff-report.json ||
+        # Linting with Ruff
+        echo 'Running Ruff linting...' &&
+        ruff check probneural_operator tests --output-format=json > quality-reports/ruff-report.json || true &&
         
-        # Type checking  
-        mypy probneural_operator --json-report quality-reports/mypy-report.json ||
+        # Type checking with MyPy
+        echo 'Running MyPy type checking...' &&
+        mypy probneural_operator --json-report quality-reports/mypy-report.json || true &&
         
-        # Security scanning
-        bandit -r probneural_operator -f json -o quality-reports/bandit-report.json ||
+        # Security scanning with Bandit
+        echo 'Running Bandit security scan...' &&
+        bandit -r probneural_operator -f json -o quality-reports/bandit-report.json || true &&
         
-        # Dependency security
-        pip-audit --format json --output quality-reports/pip-audit-report.json ||
+        # Dependency security with pip-audit
+        echo 'Running pip-audit dependency scan...' &&
+        pip-audit --format=json --output=quality-reports/pip-audit-report.json || true &&
         
-        echo 'Quality checks complete. Reports in quality-reports/'
+        # Code complexity with radon
+        echo 'Running complexity analysis...' &&
+        radon cc probneural_operator --json > quality-reports/complexity-report.json || true &&
+        
+        # Generate summary report
+        echo 'Quality checks complete. Reports available in quality-reports/' &&
+        ls -la quality-reports/
       "
     networks:
       - probneural-net
+    profiles:
+      - quality
+      - ci
 
   # Performance benchmarking
   benchmark:
     build:
-      context: .
+      <<: *common-build
       target: development
-      dockerfile: Dockerfile
     container_name: probneural-benchmark
     volumes:
       - .:/app
       - benchmark-results:/app/benchmark-results
     environment:
-      - PYTHONPATH=/app
+      <<: *common-variables
+      BENCHMARK_RESULTS_DIR: /app/benchmark-results
     command: >
       bash -c "
         mkdir -p benchmark-results &&
         echo 'Running performance benchmarks...' &&
         python -m pytest tests/benchmarks/ 
-        --benchmark-json=benchmark-results/benchmark-results.json
-        --benchmark-histogram=benchmark-results/histogram ||
+          --benchmark-json=benchmark-results/benchmark-results.json
+          --benchmark-histogram=benchmark-results/histogram
+          --benchmark-sort=mean
+          --benchmark-columns=min,max,mean,stddev,rounds,iterations &&
         echo 'Benchmarks complete. Results in benchmark-results/'
       "
     networks:
       - probneural-net
+    profiles:
+      - benchmark
+      - performance
 
-  # Database for development (if needed in future)
-  # postgres:
-  #   image: postgres:15-alpine
-  #   container_name: probneural-postgres
-  #   environment:
-  #     POSTGRES_DB: probneural
-  #     POSTGRES_USER: probneural
-  #     POSTGRES_PASSWORD: probneural_dev_password
-  #   volumes:
-  #     - postgres-data:/var/lib/postgresql/data
-  #   ports:
-  #     - "5432:5432"
-  #   networks:
-  #     - probneural-net
+  # API server (for future web API)
+  api:
+    build:
+      <<: *common-build
+      target: production
+    container_name: probneural-api
+    ports:
+      - "${API_PORT:-8002}:8000"
+    environment:
+      <<: *common-variables
+      ENVIRONMENT: production
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+    command: >
+      bash -c "
+        echo 'Starting API server...' &&
+        # This would start the actual API server when implemented
+        python -c 'print(\"API server placeholder - implement in future\")' &&
+        sleep infinity
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - probneural-net
+    profiles:
+      - api
+      - production
 
-  # Redis for caching (if needed in future)
-  # redis:
-  #   image: redis:7-alpine
-  #   container_name: probneural-redis
-  #   volumes:
-  #     - redis-data:/data
-  #   ports:
-  #     - "6379:6379"
-  #   networks:
-  #     - probneural-net
+  # Database for development/testing (PostgreSQL)
+  postgres:
+    image: postgres:15-alpine
+    container_name: probneural-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-probneural}
+      POSTGRES_USER: ${POSTGRES_USER:-probneural}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-probneural_dev_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-probneural} -d ${POSTGRES_DB:-probneural}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - probneural-net
+    profiles:
+      - database
+      - full-stack
+
+  # Redis for caching and session storage
+  redis:
+    image: redis:7-alpine
+    container_name: probneural-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-probneural_redis_password}
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - probneural-net
+    profiles:
+      - cache
+      - full-stack
+
+  # Monitoring with Prometheus (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: probneural-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    networks:
+      - probneural-net
+    profiles:
+      - monitoring
+      - observability
+
+  # Grafana for visualization (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: probneural-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - probneural-net
+    profiles:
+      - monitoring
+      - observability
 
 # Named volumes for data persistence
 volumes:
   pip-cache:
     driver: local
+  pip-cache-cuda:
+    driver: local
   bash-history:
     driver: local
+  bash-history-cuda:
+    driver: local
+  dev-data:
+    driver: local
+  dev-models:
+    driver: local
+  dev-logs:
+    driver: local
+  dev-results:
+    driver: local
   test-reports:
+    driver: local
+  test-coverage:
     driver: local
   docs-build:
     driver: local
   jupyter-data:
     driver: local
+  notebooks:
+    driver: local
+  tensorboard-logs:
+    driver: local
   quality-reports:
     driver: local
   benchmark-results:
     driver: local
-  # postgres-data:
-  #   driver: local
-  # redis-data:
-  #   driver: local
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
 
 # Custom network
 networks:
   probneural-net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
