@@ -1,6 +1,5 @@
 """Uncertainty calibration methods."""
 
-from .temperature import TemperatureScaling
-from .metrics import CalibrationMetrics
+from .temperature import TemperatureScaling, CalibrationMetrics
 
 __all__ = ["TemperatureScaling", "CalibrationMetrics"]
