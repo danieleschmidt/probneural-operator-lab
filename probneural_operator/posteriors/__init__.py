@@ -1,7 +1,23 @@
 """Posterior approximation methods for uncertainty quantification."""
 
 from .laplace import LinearizedLaplace
-from .variational import VariationalPosterior
-from .ensemble import DeepEnsemble
+from .base import PosteriorApproximation, get_posterior
 
-__all__ = ["LinearizedLaplace", "VariationalPosterior", "DeepEnsemble"]
+# Placeholders for future implementations
+class VariationalPosterior:
+    """Placeholder for VariationalPosterior - to be implemented."""
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError("VariationalPosterior not yet implemented")
+
+class DeepEnsemble:
+    """Placeholder for DeepEnsemble - to be implemented."""
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError("DeepEnsemble not yet implemented")
+
+__all__ = [
+    "PosteriorApproximation",
+    "get_posterior",
+    "LinearizedLaplace", 
+    "VariationalPosterior", 
+    "DeepEnsemble"
+]
