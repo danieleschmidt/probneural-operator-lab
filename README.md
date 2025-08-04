@@ -28,7 +28,7 @@ pip install probneural-operator-lab[full]
 pip install probneural-operator-lab[gpu]
 
 # Development installation
-git clone https://github.com/yourusername/probneural-operator-lab
+git clone https://github.com/danieleschmidt/probneural-operator-lab
 cd probneural-operator-lab
 pip install -e ".[dev]"
 ```
@@ -707,9 +707,9 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ```bibtex
 @software{probneural_operator_lab,
   title={ProbNeural-Operator-Lab: Probabilistic Neural Operators with Active Learning},
-  author={Your Name},
+  author={Daniel Schmidt},
   year={2025},
-  url={https://github.com/yourusername/probneural-operator-lab}
+  url={https://github.com/danieleschmidt/probneural-operator-lab}
 }
 
 @inproceedings{linearized_probabilistic_no_2025,
