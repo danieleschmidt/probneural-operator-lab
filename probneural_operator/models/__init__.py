@@ -1,14 +1,10 @@
 """Neural operator models with uncertainty quantification."""
 
 from .fno import FourierNeuralOperator, ProbabilisticFNO
+from .deeponet import DeepONet, ProbabilisticDeepONet
 from .base import NeuralOperator, ProbabilisticNeuralOperator
 
-# Placeholders for future implementations
-class ProbabilisticDeepONet:
-    """Placeholder for ProbabilisticDeepONet - to be implemented."""
-    def __init__(self, *args, **kwargs):
-        raise NotImplementedError("ProbabilisticDeepONet not yet implemented")
-
+# Placeholder for future implementation
 class ProbabilisticGNO:
     """Placeholder for ProbabilisticGNO - to be implemented."""
     def __init__(self, *args, **kwargs):
@@ -19,6 +15,7 @@ __all__ = [
     "ProbabilisticNeuralOperator",
     "FourierNeuralOperator", 
     "ProbabilisticFNO",
+    "DeepONet",
     "ProbabilisticDeepONet",
     "ProbabilisticGNO"
 ]

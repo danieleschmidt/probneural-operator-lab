@@ -81,11 +81,15 @@ class PDEDataset(Dataset, ABC):
             inputs = self.inputs[idx:idx+1]
             outputs = self.outputs[idx:idx+1]
         
-        # Convert to tensors
+        # Convert to tensors and ensure float32 dtype
         if not isinstance(inputs, torch.Tensor):
-            inputs = torch.from_numpy(inputs).float()
+            inputs = torch.from_numpy(inputs.astype(np.float32))
+        else:
+            inputs = inputs.float()
         if not isinstance(outputs, torch.Tensor):
-            outputs = torch.from_numpy(outputs).float()
+            outputs = torch.from_numpy(outputs.astype(np.float32))
+        else:
+            outputs = outputs.float()
         
         # Apply normalization
         if self.normalize:
@@ -97,9 +101,11 @@ class PDEDataset(Dataset, ABC):
     def _compute_normalization_stats(self) -> None:
         """Compute normalization statistics."""
         if self.inputs is not None and self.outputs is not None:
-            # Convert to tensors if needed
-            inputs = self.inputs if isinstance(self.inputs, torch.Tensor) else torch.from_numpy(self.inputs)
-            outputs = self.outputs if isinstance(self.outputs, torch.Tensor) else torch.from_numpy(self.outputs)
+            # Convert to tensors if needed and ensure float32
+            inputs = self.inputs if isinstance(self.inputs, torch.Tensor) else torch.from_numpy(self.inputs.astype(np.float32))
+            outputs = self.outputs if isinstance(self.outputs, torch.Tensor) else torch.from_numpy(self.outputs.astype(np.float32))
+            inputs = inputs.float()
+            outputs = outputs.float()
             
             # Compute statistics over batch dimension
             self.input_mean = inputs.mean(dim=0, keepdim=True)
