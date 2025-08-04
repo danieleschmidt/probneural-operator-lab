@@ -193,6 +193,94 @@ class ProbabilisticFNO(ProbabilisticNeuralOperator):
         x = self.project(x)
         return x.permute(0, -1, *range(1, x.ndim-1))
     
+    def fit(self, 
+            train_loader,
+            val_loader = None,
+            epochs: int = 100,
+            lr: float = 1e-3,
+            device: str = "auto"):
+        """Override fit method to handle tensor reshaping for FNO."""
+        if device == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        
+        self.to(device)
+        optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+        criterion = torch.nn.MSELoss()
+        
+        history = {"train_loss": [], "val_loss": []}
+        
+        for epoch in range(epochs):
+            # Training
+            self.train()
+            train_loss = 0.0
+            for batch_idx, (data, target) in enumerate(train_loader):
+                data, target = data.to(device), target.to(device)
+                
+                # Reshape data for FNO: add channel dimension
+                if data.ndim == 2:  # 1D spatial case: (batch, spatial) -> (batch, 1, spatial)
+                    data = data.unsqueeze(1)
+                elif data.ndim == 3:  # 2D spatial case: (batch, height, width) -> (batch, 1, height, width)
+                    data = data.unsqueeze(1)
+                
+                # Use last time step as target for time-series data
+                if target.ndim > data.ndim - 1:
+                    target = target[:, -1]  # Take final time step
+                
+                optimizer.zero_grad()
+                output = self(data)
+                
+                # Remove channel dimension from output for loss computation
+                if output.ndim > target.ndim:
+                    output = output.squeeze(1)
+                
+                loss = criterion(output, target)
+                loss.backward()
+                optimizer.step()
+                
+                train_loss += loss.item()
+            
+            if len(train_loader) > 0:
+                train_loss /= len(train_loader)
+            history["train_loss"].append(train_loss)
+            
+            # Validation
+            if val_loader is not None:
+                self.eval()
+                val_loss = 0.0
+                with torch.no_grad():
+                    for data, target in val_loader:
+                        data, target = data.to(device), target.to(device)
+                        
+                        # Reshape data for FNO
+                        if data.ndim == 2:
+                            data = data.unsqueeze(1)
+                        elif data.ndim == 3:
+                            data = data.unsqueeze(1)
+                        
+                        # Use last time step as target
+                        if target.ndim > data.ndim - 1:
+                            target = target[:, -1]
+                        
+                        output = self(data)
+                        
+                        # Remove channel dimension from output
+                        if output.ndim > target.ndim:
+                            output = output.squeeze(1)
+                        
+                        val_loss += criterion(output, target).item()
+                
+                if len(val_loader) > 0:
+                    val_loss /= len(val_loader)
+                history["val_loss"].append(val_loss)
+                
+                if epoch % 10 == 0:
+                    print(f"Epoch {epoch}: Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}")
+            else:
+                if epoch % 10 == 0:
+                    print(f"Epoch {epoch}: Train Loss: {train_loss:.6f}")
+        
+        return history
+    
     @classmethod
     def from_config(cls, config: dict) -> "ProbabilisticFNO":
         """Create ProbabilisticFNO from configuration dictionary.

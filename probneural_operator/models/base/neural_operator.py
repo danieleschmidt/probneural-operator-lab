@@ -83,7 +83,8 @@ class NeuralOperator(nn.Module, ABC):
                 
                 train_loss += loss.item()
             
-            train_loss /= len(train_loader)
+            if len(train_loader) > 0:
+                train_loss /= len(train_loader)
             history["train_loss"].append(train_loss)
             
             # Validation
@@ -96,7 +97,8 @@ class NeuralOperator(nn.Module, ABC):
                         output = self(data)
                         val_loss += criterion(output, target).item()
                 
-                val_loss /= len(val_loader)
+                if len(val_loader) > 0:
+                    val_loss /= len(val_loader)
                 history["val_loss"].append(val_loss)
                 
                 if epoch % 10 == 0:
@@ -127,11 +129,23 @@ class NeuralOperator(nn.Module, ABC):
     
     def get_config(self) -> Dict[str, Any]:
         """Get model configuration."""
-        return {
+        config = {
             "input_dim": self.input_dim,
             "output_dim": self.output_dim,
             **self._config
         }
+        
+        # Add FNO-specific attributes if they exist
+        if hasattr(self, 'modes'):
+            config['modes'] = self.modes
+        if hasattr(self, 'width'):
+            config['width'] = self.width
+        if hasattr(self, 'depth'):
+            config['depth'] = self.depth
+        if hasattr(self, 'spatial_dim'):
+            config['spatial_dim'] = self.spatial_dim
+            
+        return config
 
 
 class ProbabilisticNeuralOperator(NeuralOperator):
