@@ -1,12 +1,96 @@
-"""Fourier Neural Operator implementation with uncertainty quantification."""
+"""
+Fourier Neural Operator implementation with uncertainty quantification.
 
-from typing import Optional, List
+This module implements the Fourier Neural Operator (FNO) architecture for learning
+mappings between infinite-dimensional function spaces. FNOs are particularly 
+effective for partial differential equations (PDEs) and can generalize across
+different discretizations and domains.
+
+Mathematical Foundation:
+    The FNO learns an operator G_θ: A → B that maps between function spaces,
+    where A and B are infinite-dimensional spaces. The key innovation is the
+    use of spectral convolutions in Fourier space:
+    
+    (K * v)(x) = F^{-1}(R_θ · F(v))(x)
+    
+    where F and F^{-1} are the Fourier transform and inverse, and R_θ are
+    learnable weights in Fourier space.
+
+Architecture:
+    1. Lifting layer: R^d → R^d_v (lift input to higher dimension)
+    2. Fourier layers: Apply spectral convolution + pointwise linear
+    3. Projection layer: R^d_v → R^d (project back to output space)
+
+Key Advantages:
+    - Resolution invariant (can train on one grid, test on another)
+    - Fast computation via FFT
+    - Strong theoretical foundations
+    - Excellent for periodic and quasi-periodic problems
+
+Typical Use Cases:
+    - Navier-Stokes equations
+    - Darcy flow problems  
+    - Burgers' equation
+    - Wave equations
+    - Heat equation
+
+References:
+    - Li, Z. et al. "Fourier Neural Operator for Parametric Partial Differential Equations"
+      ICLR 2021. https://arxiv.org/abs/2010.08895
+    - Li, Z. et al. "Neural Operator: Graph Kernel Network for Partial Differential Equations"
+      ICLR 2020 Workshop. https://arxiv.org/abs/2003.03485
+
+Examples:
+    Basic usage:
+        >>> model = FourierNeuralOperator(
+        ...     input_dim=1, output_dim=1, modes=16, width=64, depth=4, spatial_dim=2
+        ... )
+        >>> x = torch.randn(8, 1, 64, 64)  # batch, channels, height, width
+        >>> y = model(x)
+        >>> print(y.shape)  # torch.Size([8, 1, 64, 64])
+    
+    Probabilistic version:
+        >>> prob_model = ProbabilisticFNO(
+        ...     input_dim=1, output_dim=1, modes=16, width=64, depth=4,
+        ...     posterior_type="laplace", prior_precision=1.0
+        ... )
+        >>> mean, std = prob_model.predict_with_uncertainty(x, num_samples=100)
+        >>> print(f"Mean shape: {mean.shape}, Std shape: {std.shape}")
+
+Troubleshooting:
+    Common Issues:
+    1. Memory errors with large spatial dimensions
+       - Reduce modes or use gradient checkpointing
+       - Consider mixed precision training
+    
+    2. Poor performance on non-periodic problems
+       - Apply appropriate padding
+       - Consider domain decomposition
+    
+    3. Training instability
+       - Reduce learning rate
+       - Use gradient clipping
+       - Check for NaN/Inf values in input data
+    
+    4. Resolution mismatch errors
+       - Ensure input tensors have correct spatial dimensions
+       - Check that modes <= spatial_size // 2
+"""
+
+from typing import Optional, List, Dict, Any, Union, Tuple
+import warnings
+import logging
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from ..base import NeuralOperator, ProbabilisticNeuralOperator
 from ..base.layers import SpectralLayer, FeedForwardLayer, LiftProjectLayer
+from ...utils.validation import validate_tensor_shape, validate_tensor_finite
+from ...utils.exceptions import ModelInitializationError, ModelTrainingError
+
+logger = logging.getLogger(__name__)
 
 
 class FourierNeuralOperator(NeuralOperator):
