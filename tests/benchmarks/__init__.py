@@ -1,0 +1,1 @@
+"""Benchmark tests for performance monitoring and regression detection."""

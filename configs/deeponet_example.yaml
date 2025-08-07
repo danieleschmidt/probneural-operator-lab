@@ -1,0 +1,56 @@
+# Example DeepONet configuration with active learning
+name: "deeponet_active_experiment"
+description: "DeepONet with active learning for PDE operator learning"
+tags: ["deeponet", "active_learning", "variational"]
+
+# Model configuration
+model:
+  type: "deeponet"
+  input_dim: 2
+  output_dim: 1
+  branch_layers: [128, 128, 128, 128]
+  trunk_layers: [128, 128, 128, 128]
+  basis_functions: 100
+  activation: "relu"
+  branch_activation: "relu"
+  trunk_activation: "relu"
+  use_bias: true
+  dropout: 0.05
+  learning_rate: 0.0005
+  optimizer: "adamw"
+  weight_decay: 1e-5
+
+# Posterior approximation
+posterior:
+  method: "variational"
+  prior_precision: 0.5
+  num_samples: 20
+  kl_weight: 0.1
+
+# Training configuration
+training:
+  epochs: 200
+  batch_size: 16
+  validation_split: 0.15
+  early_stopping: true
+  patience: 25
+  device: "cuda"
+  save_checkpoints: true
+  save_best_only: true
+
+# Active learning configuration
+active_learning:
+  acquisition_function: "bald"
+  budget: 500
+  batch_size: 5
+  initial_size: 100
+  beta: 2.0
+
+# Data configuration
+dataset_type: "darcy"
+data_path: "./data/darcy_2d.h5"
+
+# Output configuration
+output_dir: "./outputs/deeponet_active"
+seed: 123
+deterministic: true

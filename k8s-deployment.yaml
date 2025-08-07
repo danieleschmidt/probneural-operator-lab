@@ -1,0 +1,250 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: probneural-operator
+  labels:
+    name: probneural-operator
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: probneural-api
+  namespace: probneural-operator
+  labels:
+    app: probneural-api
+    version: v1
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: probneural-api
+  template:
+    metadata:
+      labels:
+        app: probneural-api
+        version: v1
+    spec:
+      containers:
+      - name: probneural-api
+        image: probneural-operator:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: WORKERS
+          value: "4"
+        - name: REDIS_URL
+          value: "redis://redis-service:6379"
+        - name: POSTGRES_URL
+          valueFrom:
+            secretKeyRef:
+              name: probneural-secrets
+              key: postgres-url
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 2Gi
+            nvidia.com/gpu: 1
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+            nvidia.com/gpu: 1
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/models
+          readOnly: true
+        - name: config-volume
+          mountPath: /app/configs
+          readOnly: true
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: model-storage-pvc
+      - name: config-volume
+        configMap:
+          name: probneural-config
+      nodeSelector:
+        accelerator: nvidia-tesla-v100
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: probneural-api-service
+  namespace: probneural-operator
+  labels:
+    app: probneural-api
+spec:
+  selector:
+    app: probneural-api
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8000
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: probneural-ingress
+  namespace: probneural-operator
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit-connections: "100"
+    nginx.ingress.kubernetes.io/rate-limit-rps: "10"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+spec:
+  tls:
+  - hosts:
+    - api.probneural.example.com
+    secretName: probneural-tls
+  rules:
+  - host: api.probneural.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: probneural-api-service
+            port:
+              number: 80
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-storage-pvc
+  namespace: probneural-operator
+spec:
+  accessModes:
+  - ReadOnlyMany
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: fast-ssd
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: probneural-config
+  namespace: probneural-operator
+data:
+  production.yaml: |
+    model:
+      device: "cuda"
+      precision: "fp16"
+      batch_size: 32
+      max_sequence_length: 1024
+    
+    uncertainty:
+      method: "linearized_laplace"
+      posterior_samples: 100
+      temperature_scaling: true
+    
+    cache:
+      enabled: true
+      ttl: 3600
+      max_size: 1000
+    
+    monitoring:
+      enabled: true
+      metrics_port: 9090
+      log_level: "info"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: probneural-secrets
+  namespace: probneural-operator
+type: Opaque
+data:
+  postgres-url: cG9zdGdyZXNxbDovL3VzZXI6cGFzc3dvcmRAcG9zdGdyZXM6NTQzMi9wcm9ibmV1cmFs  # base64 encoded
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: probneural-hpa
+  namespace: probneural-operator
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: probneural-api
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: probneural-pdb
+  namespace: probneural-operator
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: probneural-api

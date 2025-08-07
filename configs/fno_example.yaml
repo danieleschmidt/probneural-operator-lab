@@ -1,0 +1,47 @@
+# Example FNO configuration for Burgers equation
+name: "fno_burgers_experiment"
+description: "Fourier Neural Operator for 1D Burgers equation with uncertainty quantification"
+tags: ["fno", "burgers", "1d", "laplace"]
+
+# Model configuration
+model:
+  type: "fno"
+  input_dim: 1
+  output_dim: 1
+  modes: 16
+  width: 64
+  depth: 4
+  spatial_dim: 1
+  activation: "gelu"
+  dropout: 0.1
+  learning_rate: 0.001
+  optimizer: "adam"
+  weight_decay: 1e-4
+
+# Posterior approximation
+posterior:
+  method: "laplace"
+  prior_precision: 1.0
+  hessian_structure: "diagonal"
+  damping: 1e-3
+
+# Training configuration
+training:
+  epochs: 100
+  batch_size: 32
+  validation_split: 0.2
+  early_stopping: true
+  patience: 15
+  min_delta: 1e-6
+  device: "auto"
+  save_checkpoints: true
+  checkpoint_freq: 10
+
+# Data configuration
+dataset_type: "burgers"
+data_path: "./data/burgers_1d.h5"
+
+# Output configuration
+output_dir: "./outputs/fno_burgers"
+seed: 42
+deterministic: false
