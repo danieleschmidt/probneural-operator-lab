@@ -1,0 +1,92 @@
+{
+  "framework": "ProbNeural-Operator-Lab",
+  "timestamp": "2025-01-XX",
+  "benchmarks": {
+    "burgers": {
+      "dataset": "burgers_equation",
+      "n_samples": 100,
+      "grid_size": 32,
+      "negative_log_likelihood": -0.15890693328171715,
+      "crps": 0.0998488188768713,
+      "interval_score": 1.19196016942858,
+      "expected_calibration_error": 0.254032687897552
+    },
+    "darcy": {
+      "dataset": "darcy_flow",
+      "n_samples": 50,
+      "grid_size": "16x16",
+      "negative_log_likelihood": -0.9960557364303075,
+      "crps": 0.04553022108076547,
+      "interval_score": 0.3667637262157706,
+      "expected_calibration_error": 0.22681708762035535
+    }
+  },
+  "comparative_study": {
+    "burgers": {
+      "laplace": {
+        "negative_log_likelihood": 1.2622826906841744,
+        "crps": 0.6960730522799237,
+        "training_time": 60.98288802756228,
+        "inference_time": 0.4298555549379539,
+        "memory_usage": 1062.2546789401154
+      },
+      "variational": {
+        "negative_log_likelihood": 1.1249416586192167,
+        "crps": 0.2752563445227741,
+        "training_time": 29.21231303799155,
+        "inference_time": 0.48932261437228075,
+        "memory_usage": 651.6772706970393
+      },
+      "ensemble": {
+        "negative_log_likelihood": 0.8418853305805679,
+        "crps": 0.46018526504114976,
+        "training_time": 183.46236422917858,
+        "inference_time": 0.035615211304873,
+        "memory_usage": 560.5537398767397
+      },
+      "dropout": {
+        "negative_log_likelihood": 1.6256961992279564,
+        "crps": 0.4791128699324286,
+        "training_time": 161.59269891864434,
+        "inference_time": 0.6400826267830498,
+        "memory_usage": 1975.652535203442
+      }
+    },
+    "darcy": {
+      "laplace": {
+        "negative_log_likelihood": 1.2588778483000977,
+        "crps": 0.28156984149668757,
+        "training_time": 164.58862767872088,
+        "inference_time": 0.3929752582031068,
+        "memory_usage": 1554.4040417931133
+      },
+      "variational": {
+        "negative_log_likelihood": 1.4527125124723845,
+        "crps": 0.629564660194924,
+        "training_time": 104.43969608804878,
+        "inference_time": 0.4423883986513538,
+        "memory_usage": 1145.359215239293
+      },
+      "ensemble": {
+        "negative_log_likelihood": 1.0641362738276308,
+        "crps": 0.44747916838991403,
+        "training_time": 244.1583750855997,
+        "inference_time": 0.43825989374991103,
+        "memory_usage": 1345.6557021200415
+      },
+      "dropout": {
+        "negative_log_likelihood": 1.5786387243326967,
+        "crps": 0.558620274275145,
+        "training_time": 156.4468496684267,
+        "inference_time": 0.8089521685567701,
+        "memory_usage": 1840.6486864139247
+      }
+    }
+  },
+  "summary": {
+    "average_nll": -0.5774813348560124,
+    "average_crps": 0.0726895199788184,
+    "datasets_tested": 2,
+    "methods_compared": 4
+  }
+}
