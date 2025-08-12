@@ -1,0 +1,126 @@
+# Docker Compose for ProbNeural Operator Lab Production Environment
+version: '3.8'
+
+services:
+  probneural-operator:
+    build:
+      context: ..
+      dockerfile: production/docker/Dockerfile.prod
+    image: probneural-operator:latest
+    container_name: probneural-operator
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - CUDA_VISIBLE_DEVICES=0,1
+      - DISTRIBUTED_BACKEND=nccl
+      - WORLD_SIZE=2
+    volumes:
+      - model_storage:/app/models
+      - data_storage:/app/data
+      - logs:/app/logs
+      - ./config:/app/config:ro
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 2
+              capabilities: [gpu]
+    networks:
+      - probneural-network
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - postgres
+
+  redis:
+    image: redis:7-alpine
+    container_name: probneural-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - probneural-network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: probneural-postgres
+    environment:
+      - POSTGRES_DB=probneural
+      - POSTGRES_USER=probneural
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - probneural-network
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: probneural-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    networks:
+      - probneural-network
+    restart: unless-stopped
+    depends_on:
+      - probneural-operator
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: probneural-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - probneural-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: probneural-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - probneural-network
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+volumes:
+  model_storage:
+    driver: local
+  data_storage:
+    driver: local
+  logs:
+    driver: local
+  redis_data:
+    driver: local
+  postgres_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  probneural-network:
+    driver: bridge

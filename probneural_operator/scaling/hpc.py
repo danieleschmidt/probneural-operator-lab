@@ -101,6 +101,320 @@ class SLURMIntegration:
             return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
+
+
+# ========== ADVANCED HPC ENHANCEMENTS ==========
+
+class HPCResourceOptimizer:
+    """Advanced resource optimizer for HPC neural operator training."""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self._optimization_cache = {}
+    
+    def optimize_resource_allocation(self,
+                                   model_config: Dict[str, Any],
+                                   dataset_size: int,
+                                   target_time_hours: float = 24.0) -> SLURMJobConfig:
+        """Optimize resource allocation for neural operator training.
+        
+        Args:
+            model_config: Model configuration parameters
+            dataset_size: Training dataset size
+            target_time_hours: Target training time in hours
+            
+        Returns:
+            Optimized SLURM job configuration
+        """
+        # Create cache key
+        cache_key = json.dumps({
+            'model': model_config,
+            'dataset_size': dataset_size,
+            'target_time': target_time_hours
+        }, sort_keys=True)
+        
+        if cache_key in self._optimization_cache:
+            self.logger.info("Using cached optimization result")
+            return self._optimization_cache[cache_key]
+        
+        # Estimate computational requirements
+        width = model_config.get('width', 64)
+        depth = model_config.get('depth', 4)
+        modes = model_config.get('modes', 12)
+        spatial_dim = model_config.get('spatial_dim', 2)
+        batch_size = model_config.get('batch_size', 32)
+        
+        # Parameter count estimation
+        param_count = width * width * depth + width * (modes ** spatial_dim)
+        
+        # Memory estimation (GB)
+        model_memory = param_count * 4 * 3 / (1024**3)  # model + grads + optimizer
+        batch_memory = batch_size * width * (64**spatial_dim) * 4 / (1024**3)
+        total_memory = model_memory + batch_memory + 4  # 4GB safety buffer
+        
+        # Determine optimal configuration
+        if total_memory <= 16:  # Single GPU
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=1,
+                gpus_per_node=1,
+                gpu_type="v100",
+                mem_per_cpu="16G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        elif total_memory <= 64:  # Multi-GPU single node
+            gpus_needed = max(1, int(total_memory / 16))
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=gpus_needed,
+                gpus_per_node=gpus_needed,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        else:  # Multi-node
+            nodes_needed = max(1, int(total_memory / 64))
+            config = SLURMJobConfig(
+                nodes=nodes_needed,
+                ntasks_per_node=4,  # 4 GPUs per node
+                gpus_per_node=4,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours * 1.2):02d}:00:00"  # 20% buffer for multi-node
+            )
+        
+        # Cache result
+        self._optimization_cache[cache_key] = config
+        
+        self.logger.info(
+            f"Optimized resource allocation: {config.nodes}x{config.gpus_per_node} {config.gpu_type}, "
+            f"Est. memory: {total_memory:.1f}GB"
+        )
+        
+        return config
+
+
+class HPCWorkflowManager:
+    """High-level workflow management for neural operator research campaigns."""
+    
+    def __init__(self, slurm_integration: SLURMIntegration):
+        self.slurm = slurm_integration
+        self.optimizer = HPCResourceOptimizer()
+        self.logger = logging.getLogger(__name__)
+        self._active_campaigns = {}
+    
+    def submit_research_campaign(self,
+                               base_config: Dict[str, Any],
+                               parameter_sweep: Dict[str, List[Any]],
+                               campaign_name: str = "neural_operator_research") -> str:
+        """Submit a large-scale research campaign.
+        
+        Args:
+            base_config: Base experimental configuration
+            parameter_sweep: Parameters to sweep over
+            campaign_name: Campaign identifier
+            
+        Returns:
+            Campaign ID
+        """
+        from itertools import product
+        
+        campaign_id = f"{campaign_name}_{int(time.time())}"
+        
+        # Generate parameter combinations
+        param_names = list(parameter_sweep.keys())
+        param_values = list(parameter_sweep.values())
+        combinations = list(product(*param_values))
+        
+        self.logger.info(
+            f"Starting research campaign {campaign_id} with {len(combinations)} experiments"
+        )
+        
+        job_ids = []
+        
+        for i, combo in enumerate(combinations):
+            # Create experiment config
+            exp_config = base_config.copy()
+            
+            for param_name, param_value in zip(param_names, combo):
+                if '.' in param_name:
+                    keys = param_name.split('.')
+                    current = exp_config
+                    for key in keys[:-1]:
+                        if key not in current:
+                            current[key] = {}
+                        current = current[key]
+                    current[keys[-1]] = param_value
+                else:
+                    exp_config[param_name] = param_value
+            
+            # Optimize resources
+            model_config = exp_config.get('model', {})
+            dataset_size = exp_config.get('dataset', {}).get('size', 10000)
+            
+            slurm_config = self.optimizer.optimize_resource_allocation(
+                model_config, dataset_size
+            )
+            slurm_config.job_name = f"{campaign_name}_exp_{i:04d}"
+            
+            # Submit job
+            try:
+                job_id = self.slurm.submit_job(
+                    config=slurm_config,
+                    python_script="train_probabilistic_no.py",
+                    script_args=["--config", json.dumps(exp_config)]
+                )
+                
+                if job_id:
+                    job_ids.append(job_id)
+                    self.logger.info(
+                        f"Submitted experiment {i+1}/{len(combinations)}: {job_id}"
+                    )
+            
+            except Exception as e:
+                self.logger.error(f"Failed to submit experiment {i}: {e}")
+        
+        # Store campaign info
+        campaign_info = {
+            'campaign_id': campaign_id,
+            'start_time': time.time(),
+            'base_config': base_config,
+            'parameter_sweep': parameter_sweep,
+            'job_ids': job_ids,
+            'status': 'running'
+        }
+        
+        self._active_campaigns[campaign_id] = campaign_info
+        
+        return campaign_id
+    
+    def monitor_campaign_progress(self, campaign_id: str) -> Dict[str, Any]:
+        """Monitor research campaign progress."""
+        if campaign_id not in self._active_campaigns:
+            return {'error': f'Campaign {campaign_id} not found'}
+        
+        campaign_info = self._active_campaigns[campaign_id]
+        job_ids = campaign_info['job_ids']
+        
+        # Check job statuses
+        status_counts = {'PENDING': 0, 'RUNNING': 0, 'COMPLETED': 0, 'FAILED': 0}
+        
+        for job_id in job_ids:
+            status = self.slurm.get_job_status(job_id)
+            if status:
+                state = status.get('state', 'UNKNOWN')
+                status_counts[state] = status_counts.get(state, 0) + 1
+        
+        # Calculate progress
+        total_jobs = len(job_ids)
+        completed = status_counts.get('COMPLETED', 0)
+        progress_pct = (completed / total_jobs) * 100 if total_jobs > 0 else 0
+        
+        return {
+            'campaign_id': campaign_id,
+            'total_experiments': total_jobs,
+            'completed': completed,
+            'progress_percent': progress_pct,
+            'status_breakdown': status_counts,
+            'runtime_hours': (time.time() - campaign_info['start_time']) / 3600
+        }
+
+
+# Advanced HPC utility functions
+
+def create_distributed_training_script(model_config: Dict[str, Any],
+                                      output_path: str = "distributed_train.py") -> str:
+    """Generate distributed training script for HPC deployment.
+    
+    Args:
+        model_config: Model configuration
+        output_path: Output script path
+        
+    Returns:
+        Path to generated script
+    """
+    script_content = f'''
+#!/usr/bin/env python
+"""Distributed probabilistic neural operator training script for HPC."""
+
+import os
+import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+
+from probneural_operator.models.fno import ProbabilisticFNO
+from probneural_operator.scaling.distributed_training import (
+    DistributedConfig, DistributedUncertaintyTrainer
+)
+
+def main():
+    # Initialize distributed training
+    config = DistributedConfig()
+    
+    # Create model
+    model = ProbabilisticFNO(
+        input_dim={model_config.get('input_dim', 1)},
+        output_dim={model_config.get('output_dim', 1)},
+        modes={model_config.get('modes', 12)},
+        width={model_config.get('width', 64)},
+        depth={model_config.get('depth', 4)},
+        spatial_dim={model_config.get('spatial_dim', 2)}
+    )
+    
+    # Create distributed trainer
+    trainer = DistributedUncertaintyTrainer(model, config)
+    
+    # Load data and train (implementation specific)
+    print(f"Training started on rank {{config.rank}}/{{config.world_size}}")
+    
+    # Training implementation would go here
+    # trainer.train(train_loader, val_loader, epochs=100)
+
+if __name__ == "__main__":
+    main()
+'''
+    
+    with open(output_path, 'w') as f:
+        f.write(script_content)
+    
+    os.chmod(output_path, 0o755)
+    return output_path
+
+
+def estimate_hpc_costs(model_config: Dict[str, Any],
+                      dataset_size: int,
+                      training_hours: float,
+                      gpu_type: str = "a100") -> Dict[str, float]:
+    """Estimate HPC computational costs."""
+    
+    gpu_costs_per_hour = {
+        'v100': 3.00,
+        'a100': 4.50,
+        'rtx3090': 1.20,
+        'h100': 6.00
+    }
+    
+    optimizer = HPCResourceOptimizer()
+    config = optimizer.optimize_resource_allocation(model_config, dataset_size, training_hours)
+    
+    total_gpus = config.nodes * config.gpus_per_node
+    gpu_cost_per_hour = gpu_costs_per_hour.get(config.gpu_type or gpu_type, 3.00)
+    
+    total_gpu_hours = total_gpus * training_hours
+    compute_cost = total_gpu_hours * gpu_cost_per_hour
+    
+    # Add additional costs
+    storage_cost = dataset_size * 1e-6  # $1 per TB
+    network_cost = compute_cost * 0.03  # 3% of compute for network
+    
+    return {
+        'total_cost': compute_cost + storage_cost + network_cost,
+        'compute_cost': compute_cost,
+        'storage_cost': storage_cost,
+        'network_cost': network_cost,
+        'total_gpu_hours': total_gpu_hours,
+        'estimated_config': config.__dict__
+    }
     
     def generate_slurm_script(self, 
                             config: SLURMJobConfig,
@@ -388,6 +702,320 @@ class SLURMIntegration:
         """
         if not self.slurm_available:
             return False
+
+
+# ========== ADVANCED HPC ENHANCEMENTS ==========
+
+class HPCResourceOptimizer:
+    """Advanced resource optimizer for HPC neural operator training."""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self._optimization_cache = {}
+    
+    def optimize_resource_allocation(self,
+                                   model_config: Dict[str, Any],
+                                   dataset_size: int,
+                                   target_time_hours: float = 24.0) -> SLURMJobConfig:
+        """Optimize resource allocation for neural operator training.
+        
+        Args:
+            model_config: Model configuration parameters
+            dataset_size: Training dataset size
+            target_time_hours: Target training time in hours
+            
+        Returns:
+            Optimized SLURM job configuration
+        """
+        # Create cache key
+        cache_key = json.dumps({
+            'model': model_config,
+            'dataset_size': dataset_size,
+            'target_time': target_time_hours
+        }, sort_keys=True)
+        
+        if cache_key in self._optimization_cache:
+            self.logger.info("Using cached optimization result")
+            return self._optimization_cache[cache_key]
+        
+        # Estimate computational requirements
+        width = model_config.get('width', 64)
+        depth = model_config.get('depth', 4)
+        modes = model_config.get('modes', 12)
+        spatial_dim = model_config.get('spatial_dim', 2)
+        batch_size = model_config.get('batch_size', 32)
+        
+        # Parameter count estimation
+        param_count = width * width * depth + width * (modes ** spatial_dim)
+        
+        # Memory estimation (GB)
+        model_memory = param_count * 4 * 3 / (1024**3)  # model + grads + optimizer
+        batch_memory = batch_size * width * (64**spatial_dim) * 4 / (1024**3)
+        total_memory = model_memory + batch_memory + 4  # 4GB safety buffer
+        
+        # Determine optimal configuration
+        if total_memory <= 16:  # Single GPU
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=1,
+                gpus_per_node=1,
+                gpu_type="v100",
+                mem_per_cpu="16G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        elif total_memory <= 64:  # Multi-GPU single node
+            gpus_needed = max(1, int(total_memory / 16))
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=gpus_needed,
+                gpus_per_node=gpus_needed,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        else:  # Multi-node
+            nodes_needed = max(1, int(total_memory / 64))
+            config = SLURMJobConfig(
+                nodes=nodes_needed,
+                ntasks_per_node=4,  # 4 GPUs per node
+                gpus_per_node=4,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours * 1.2):02d}:00:00"  # 20% buffer for multi-node
+            )
+        
+        # Cache result
+        self._optimization_cache[cache_key] = config
+        
+        self.logger.info(
+            f"Optimized resource allocation: {config.nodes}x{config.gpus_per_node} {config.gpu_type}, "
+            f"Est. memory: {total_memory:.1f}GB"
+        )
+        
+        return config
+
+
+class HPCWorkflowManager:
+    """High-level workflow management for neural operator research campaigns."""
+    
+    def __init__(self, slurm_integration: SLURMIntegration):
+        self.slurm = slurm_integration
+        self.optimizer = HPCResourceOptimizer()
+        self.logger = logging.getLogger(__name__)
+        self._active_campaigns = {}
+    
+    def submit_research_campaign(self,
+                               base_config: Dict[str, Any],
+                               parameter_sweep: Dict[str, List[Any]],
+                               campaign_name: str = "neural_operator_research") -> str:
+        """Submit a large-scale research campaign.
+        
+        Args:
+            base_config: Base experimental configuration
+            parameter_sweep: Parameters to sweep over
+            campaign_name: Campaign identifier
+            
+        Returns:
+            Campaign ID
+        """
+        from itertools import product
+        
+        campaign_id = f"{campaign_name}_{int(time.time())}"
+        
+        # Generate parameter combinations
+        param_names = list(parameter_sweep.keys())
+        param_values = list(parameter_sweep.values())
+        combinations = list(product(*param_values))
+        
+        self.logger.info(
+            f"Starting research campaign {campaign_id} with {len(combinations)} experiments"
+        )
+        
+        job_ids = []
+        
+        for i, combo in enumerate(combinations):
+            # Create experiment config
+            exp_config = base_config.copy()
+            
+            for param_name, param_value in zip(param_names, combo):
+                if '.' in param_name:
+                    keys = param_name.split('.')
+                    current = exp_config
+                    for key in keys[:-1]:
+                        if key not in current:
+                            current[key] = {}
+                        current = current[key]
+                    current[keys[-1]] = param_value
+                else:
+                    exp_config[param_name] = param_value
+            
+            # Optimize resources
+            model_config = exp_config.get('model', {})
+            dataset_size = exp_config.get('dataset', {}).get('size', 10000)
+            
+            slurm_config = self.optimizer.optimize_resource_allocation(
+                model_config, dataset_size
+            )
+            slurm_config.job_name = f"{campaign_name}_exp_{i:04d}"
+            
+            # Submit job
+            try:
+                job_id = self.slurm.submit_job(
+                    config=slurm_config,
+                    python_script="train_probabilistic_no.py",
+                    script_args=["--config", json.dumps(exp_config)]
+                )
+                
+                if job_id:
+                    job_ids.append(job_id)
+                    self.logger.info(
+                        f"Submitted experiment {i+1}/{len(combinations)}: {job_id}"
+                    )
+            
+            except Exception as e:
+                self.logger.error(f"Failed to submit experiment {i}: {e}")
+        
+        # Store campaign info
+        campaign_info = {
+            'campaign_id': campaign_id,
+            'start_time': time.time(),
+            'base_config': base_config,
+            'parameter_sweep': parameter_sweep,
+            'job_ids': job_ids,
+            'status': 'running'
+        }
+        
+        self._active_campaigns[campaign_id] = campaign_info
+        
+        return campaign_id
+    
+    def monitor_campaign_progress(self, campaign_id: str) -> Dict[str, Any]:
+        """Monitor research campaign progress."""
+        if campaign_id not in self._active_campaigns:
+            return {'error': f'Campaign {campaign_id} not found'}
+        
+        campaign_info = self._active_campaigns[campaign_id]
+        job_ids = campaign_info['job_ids']
+        
+        # Check job statuses
+        status_counts = {'PENDING': 0, 'RUNNING': 0, 'COMPLETED': 0, 'FAILED': 0}
+        
+        for job_id in job_ids:
+            status = self.slurm.get_job_status(job_id)
+            if status:
+                state = status.get('state', 'UNKNOWN')
+                status_counts[state] = status_counts.get(state, 0) + 1
+        
+        # Calculate progress
+        total_jobs = len(job_ids)
+        completed = status_counts.get('COMPLETED', 0)
+        progress_pct = (completed / total_jobs) * 100 if total_jobs > 0 else 0
+        
+        return {
+            'campaign_id': campaign_id,
+            'total_experiments': total_jobs,
+            'completed': completed,
+            'progress_percent': progress_pct,
+            'status_breakdown': status_counts,
+            'runtime_hours': (time.time() - campaign_info['start_time']) / 3600
+        }
+
+
+# Advanced HPC utility functions
+
+def create_distributed_training_script(model_config: Dict[str, Any],
+                                      output_path: str = "distributed_train.py") -> str:
+    """Generate distributed training script for HPC deployment.
+    
+    Args:
+        model_config: Model configuration
+        output_path: Output script path
+        
+    Returns:
+        Path to generated script
+    """
+    script_content = f'''
+#!/usr/bin/env python
+"""Distributed probabilistic neural operator training script for HPC."""
+
+import os
+import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+
+from probneural_operator.models.fno import ProbabilisticFNO
+from probneural_operator.scaling.distributed_training import (
+    DistributedConfig, DistributedUncertaintyTrainer
+)
+
+def main():
+    # Initialize distributed training
+    config = DistributedConfig()
+    
+    # Create model
+    model = ProbabilisticFNO(
+        input_dim={model_config.get('input_dim', 1)},
+        output_dim={model_config.get('output_dim', 1)},
+        modes={model_config.get('modes', 12)},
+        width={model_config.get('width', 64)},
+        depth={model_config.get('depth', 4)},
+        spatial_dim={model_config.get('spatial_dim', 2)}
+    )
+    
+    # Create distributed trainer
+    trainer = DistributedUncertaintyTrainer(model, config)
+    
+    # Load data and train (implementation specific)
+    print(f"Training started on rank {{config.rank}}/{{config.world_size}}")
+    
+    # Training implementation would go here
+    # trainer.train(train_loader, val_loader, epochs=100)
+
+if __name__ == "__main__":
+    main()
+'''
+    
+    with open(output_path, 'w') as f:
+        f.write(script_content)
+    
+    os.chmod(output_path, 0o755)
+    return output_path
+
+
+def estimate_hpc_costs(model_config: Dict[str, Any],
+                      dataset_size: int,
+                      training_hours: float,
+                      gpu_type: str = "a100") -> Dict[str, float]:
+    """Estimate HPC computational costs."""
+    
+    gpu_costs_per_hour = {
+        'v100': 3.00,
+        'a100': 4.50,
+        'rtx3090': 1.20,
+        'h100': 6.00
+    }
+    
+    optimizer = HPCResourceOptimizer()
+    config = optimizer.optimize_resource_allocation(model_config, dataset_size, training_hours)
+    
+    total_gpus = config.nodes * config.gpus_per_node
+    gpu_cost_per_hour = gpu_costs_per_hour.get(config.gpu_type or gpu_type, 3.00)
+    
+    total_gpu_hours = total_gpus * training_hours
+    compute_cost = total_gpu_hours * gpu_cost_per_hour
+    
+    # Add additional costs
+    storage_cost = dataset_size * 1e-6  # $1 per TB
+    network_cost = compute_cost * 0.03  # 3% of compute for network
+    
+    return {
+        'total_cost': compute_cost + storage_cost + network_cost,
+        'compute_cost': compute_cost,
+        'storage_cost': storage_cost,
+        'network_cost': network_cost,
+        'total_gpu_hours': total_gpu_hours,
+        'estimated_config': config.__dict__
+    }
         
         try:
             result = subprocess.run(
@@ -410,6 +1038,320 @@ class SLURMIntegration:
         except Exception as e:
             logging.error(f"Error cancelling job: {e}")
             return False
+
+
+# ========== ADVANCED HPC ENHANCEMENTS ==========
+
+class HPCResourceOptimizer:
+    """Advanced resource optimizer for HPC neural operator training."""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self._optimization_cache = {}
+    
+    def optimize_resource_allocation(self,
+                                   model_config: Dict[str, Any],
+                                   dataset_size: int,
+                                   target_time_hours: float = 24.0) -> SLURMJobConfig:
+        """Optimize resource allocation for neural operator training.
+        
+        Args:
+            model_config: Model configuration parameters
+            dataset_size: Training dataset size
+            target_time_hours: Target training time in hours
+            
+        Returns:
+            Optimized SLURM job configuration
+        """
+        # Create cache key
+        cache_key = json.dumps({
+            'model': model_config,
+            'dataset_size': dataset_size,
+            'target_time': target_time_hours
+        }, sort_keys=True)
+        
+        if cache_key in self._optimization_cache:
+            self.logger.info("Using cached optimization result")
+            return self._optimization_cache[cache_key]
+        
+        # Estimate computational requirements
+        width = model_config.get('width', 64)
+        depth = model_config.get('depth', 4)
+        modes = model_config.get('modes', 12)
+        spatial_dim = model_config.get('spatial_dim', 2)
+        batch_size = model_config.get('batch_size', 32)
+        
+        # Parameter count estimation
+        param_count = width * width * depth + width * (modes ** spatial_dim)
+        
+        # Memory estimation (GB)
+        model_memory = param_count * 4 * 3 / (1024**3)  # model + grads + optimizer
+        batch_memory = batch_size * width * (64**spatial_dim) * 4 / (1024**3)
+        total_memory = model_memory + batch_memory + 4  # 4GB safety buffer
+        
+        # Determine optimal configuration
+        if total_memory <= 16:  # Single GPU
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=1,
+                gpus_per_node=1,
+                gpu_type="v100",
+                mem_per_cpu="16G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        elif total_memory <= 64:  # Multi-GPU single node
+            gpus_needed = max(1, int(total_memory / 16))
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=gpus_needed,
+                gpus_per_node=gpus_needed,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        else:  # Multi-node
+            nodes_needed = max(1, int(total_memory / 64))
+            config = SLURMJobConfig(
+                nodes=nodes_needed,
+                ntasks_per_node=4,  # 4 GPUs per node
+                gpus_per_node=4,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours * 1.2):02d}:00:00"  # 20% buffer for multi-node
+            )
+        
+        # Cache result
+        self._optimization_cache[cache_key] = config
+        
+        self.logger.info(
+            f"Optimized resource allocation: {config.nodes}x{config.gpus_per_node} {config.gpu_type}, "
+            f"Est. memory: {total_memory:.1f}GB"
+        )
+        
+        return config
+
+
+class HPCWorkflowManager:
+    """High-level workflow management for neural operator research campaigns."""
+    
+    def __init__(self, slurm_integration: SLURMIntegration):
+        self.slurm = slurm_integration
+        self.optimizer = HPCResourceOptimizer()
+        self.logger = logging.getLogger(__name__)
+        self._active_campaigns = {}
+    
+    def submit_research_campaign(self,
+                               base_config: Dict[str, Any],
+                               parameter_sweep: Dict[str, List[Any]],
+                               campaign_name: str = "neural_operator_research") -> str:
+        """Submit a large-scale research campaign.
+        
+        Args:
+            base_config: Base experimental configuration
+            parameter_sweep: Parameters to sweep over
+            campaign_name: Campaign identifier
+            
+        Returns:
+            Campaign ID
+        """
+        from itertools import product
+        
+        campaign_id = f"{campaign_name}_{int(time.time())}"
+        
+        # Generate parameter combinations
+        param_names = list(parameter_sweep.keys())
+        param_values = list(parameter_sweep.values())
+        combinations = list(product(*param_values))
+        
+        self.logger.info(
+            f"Starting research campaign {campaign_id} with {len(combinations)} experiments"
+        )
+        
+        job_ids = []
+        
+        for i, combo in enumerate(combinations):
+            # Create experiment config
+            exp_config = base_config.copy()
+            
+            for param_name, param_value in zip(param_names, combo):
+                if '.' in param_name:
+                    keys = param_name.split('.')
+                    current = exp_config
+                    for key in keys[:-1]:
+                        if key not in current:
+                            current[key] = {}
+                        current = current[key]
+                    current[keys[-1]] = param_value
+                else:
+                    exp_config[param_name] = param_value
+            
+            # Optimize resources
+            model_config = exp_config.get('model', {})
+            dataset_size = exp_config.get('dataset', {}).get('size', 10000)
+            
+            slurm_config = self.optimizer.optimize_resource_allocation(
+                model_config, dataset_size
+            )
+            slurm_config.job_name = f"{campaign_name}_exp_{i:04d}"
+            
+            # Submit job
+            try:
+                job_id = self.slurm.submit_job(
+                    config=slurm_config,
+                    python_script="train_probabilistic_no.py",
+                    script_args=["--config", json.dumps(exp_config)]
+                )
+                
+                if job_id:
+                    job_ids.append(job_id)
+                    self.logger.info(
+                        f"Submitted experiment {i+1}/{len(combinations)}: {job_id}"
+                    )
+            
+            except Exception as e:
+                self.logger.error(f"Failed to submit experiment {i}: {e}")
+        
+        # Store campaign info
+        campaign_info = {
+            'campaign_id': campaign_id,
+            'start_time': time.time(),
+            'base_config': base_config,
+            'parameter_sweep': parameter_sweep,
+            'job_ids': job_ids,
+            'status': 'running'
+        }
+        
+        self._active_campaigns[campaign_id] = campaign_info
+        
+        return campaign_id
+    
+    def monitor_campaign_progress(self, campaign_id: str) -> Dict[str, Any]:
+        """Monitor research campaign progress."""
+        if campaign_id not in self._active_campaigns:
+            return {'error': f'Campaign {campaign_id} not found'}
+        
+        campaign_info = self._active_campaigns[campaign_id]
+        job_ids = campaign_info['job_ids']
+        
+        # Check job statuses
+        status_counts = {'PENDING': 0, 'RUNNING': 0, 'COMPLETED': 0, 'FAILED': 0}
+        
+        for job_id in job_ids:
+            status = self.slurm.get_job_status(job_id)
+            if status:
+                state = status.get('state', 'UNKNOWN')
+                status_counts[state] = status_counts.get(state, 0) + 1
+        
+        # Calculate progress
+        total_jobs = len(job_ids)
+        completed = status_counts.get('COMPLETED', 0)
+        progress_pct = (completed / total_jobs) * 100 if total_jobs > 0 else 0
+        
+        return {
+            'campaign_id': campaign_id,
+            'total_experiments': total_jobs,
+            'completed': completed,
+            'progress_percent': progress_pct,
+            'status_breakdown': status_counts,
+            'runtime_hours': (time.time() - campaign_info['start_time']) / 3600
+        }
+
+
+# Advanced HPC utility functions
+
+def create_distributed_training_script(model_config: Dict[str, Any],
+                                      output_path: str = "distributed_train.py") -> str:
+    """Generate distributed training script for HPC deployment.
+    
+    Args:
+        model_config: Model configuration
+        output_path: Output script path
+        
+    Returns:
+        Path to generated script
+    """
+    script_content = f'''
+#!/usr/bin/env python
+"""Distributed probabilistic neural operator training script for HPC."""
+
+import os
+import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+
+from probneural_operator.models.fno import ProbabilisticFNO
+from probneural_operator.scaling.distributed_training import (
+    DistributedConfig, DistributedUncertaintyTrainer
+)
+
+def main():
+    # Initialize distributed training
+    config = DistributedConfig()
+    
+    # Create model
+    model = ProbabilisticFNO(
+        input_dim={model_config.get('input_dim', 1)},
+        output_dim={model_config.get('output_dim', 1)},
+        modes={model_config.get('modes', 12)},
+        width={model_config.get('width', 64)},
+        depth={model_config.get('depth', 4)},
+        spatial_dim={model_config.get('spatial_dim', 2)}
+    )
+    
+    # Create distributed trainer
+    trainer = DistributedUncertaintyTrainer(model, config)
+    
+    # Load data and train (implementation specific)
+    print(f"Training started on rank {{config.rank}}/{{config.world_size}}")
+    
+    # Training implementation would go here
+    # trainer.train(train_loader, val_loader, epochs=100)
+
+if __name__ == "__main__":
+    main()
+'''
+    
+    with open(output_path, 'w') as f:
+        f.write(script_content)
+    
+    os.chmod(output_path, 0o755)
+    return output_path
+
+
+def estimate_hpc_costs(model_config: Dict[str, Any],
+                      dataset_size: int,
+                      training_hours: float,
+                      gpu_type: str = "a100") -> Dict[str, float]:
+    """Estimate HPC computational costs."""
+    
+    gpu_costs_per_hour = {
+        'v100': 3.00,
+        'a100': 4.50,
+        'rtx3090': 1.20,
+        'h100': 6.00
+    }
+    
+    optimizer = HPCResourceOptimizer()
+    config = optimizer.optimize_resource_allocation(model_config, dataset_size, training_hours)
+    
+    total_gpus = config.nodes * config.gpus_per_node
+    gpu_cost_per_hour = gpu_costs_per_hour.get(config.gpu_type or gpu_type, 3.00)
+    
+    total_gpu_hours = total_gpus * training_hours
+    compute_cost = total_gpu_hours * gpu_cost_per_hour
+    
+    # Add additional costs
+    storage_cost = dataset_size * 1e-6  # $1 per TB
+    network_cost = compute_cost * 0.03  # 3% of compute for network
+    
+    return {
+        'total_cost': compute_cost + storage_cost + network_cost,
+        'compute_cost': compute_cost,
+        'storage_cost': storage_cost,
+        'network_cost': network_cost,
+        'total_gpu_hours': total_gpu_hours,
+        'estimated_config': config.__dict__
+    }
     
     def wait_for_job(self, 
                     job_id: str, 
@@ -552,11 +1494,639 @@ class MPIDistributedTrainer:
             return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
+
+
+# ========== ADVANCED HPC ENHANCEMENTS ==========
+
+class HPCResourceOptimizer:
+    """Advanced resource optimizer for HPC neural operator training."""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self._optimization_cache = {}
+    
+    def optimize_resource_allocation(self,
+                                   model_config: Dict[str, Any],
+                                   dataset_size: int,
+                                   target_time_hours: float = 24.0) -> SLURMJobConfig:
+        """Optimize resource allocation for neural operator training.
+        
+        Args:
+            model_config: Model configuration parameters
+            dataset_size: Training dataset size
+            target_time_hours: Target training time in hours
+            
+        Returns:
+            Optimized SLURM job configuration
+        """
+        # Create cache key
+        cache_key = json.dumps({
+            'model': model_config,
+            'dataset_size': dataset_size,
+            'target_time': target_time_hours
+        }, sort_keys=True)
+        
+        if cache_key in self._optimization_cache:
+            self.logger.info("Using cached optimization result")
+            return self._optimization_cache[cache_key]
+        
+        # Estimate computational requirements
+        width = model_config.get('width', 64)
+        depth = model_config.get('depth', 4)
+        modes = model_config.get('modes', 12)
+        spatial_dim = model_config.get('spatial_dim', 2)
+        batch_size = model_config.get('batch_size', 32)
+        
+        # Parameter count estimation
+        param_count = width * width * depth + width * (modes ** spatial_dim)
+        
+        # Memory estimation (GB)
+        model_memory = param_count * 4 * 3 / (1024**3)  # model + grads + optimizer
+        batch_memory = batch_size * width * (64**spatial_dim) * 4 / (1024**3)
+        total_memory = model_memory + batch_memory + 4  # 4GB safety buffer
+        
+        # Determine optimal configuration
+        if total_memory <= 16:  # Single GPU
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=1,
+                gpus_per_node=1,
+                gpu_type="v100",
+                mem_per_cpu="16G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        elif total_memory <= 64:  # Multi-GPU single node
+            gpus_needed = max(1, int(total_memory / 16))
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=gpus_needed,
+                gpus_per_node=gpus_needed,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        else:  # Multi-node
+            nodes_needed = max(1, int(total_memory / 64))
+            config = SLURMJobConfig(
+                nodes=nodes_needed,
+                ntasks_per_node=4,  # 4 GPUs per node
+                gpus_per_node=4,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours * 1.2):02d}:00:00"  # 20% buffer for multi-node
+            )
+        
+        # Cache result
+        self._optimization_cache[cache_key] = config
+        
+        self.logger.info(
+            f"Optimized resource allocation: {config.nodes}x{config.gpus_per_node} {config.gpu_type}, "
+            f"Est. memory: {total_memory:.1f}GB"
+        )
+        
+        return config
+
+
+class HPCWorkflowManager:
+    """High-level workflow management for neural operator research campaigns."""
+    
+    def __init__(self, slurm_integration: SLURMIntegration):
+        self.slurm = slurm_integration
+        self.optimizer = HPCResourceOptimizer()
+        self.logger = logging.getLogger(__name__)
+        self._active_campaigns = {}
+    
+    def submit_research_campaign(self,
+                               base_config: Dict[str, Any],
+                               parameter_sweep: Dict[str, List[Any]],
+                               campaign_name: str = "neural_operator_research") -> str:
+        """Submit a large-scale research campaign.
+        
+        Args:
+            base_config: Base experimental configuration
+            parameter_sweep: Parameters to sweep over
+            campaign_name: Campaign identifier
+            
+        Returns:
+            Campaign ID
+        """
+        from itertools import product
+        
+        campaign_id = f"{campaign_name}_{int(time.time())}"
+        
+        # Generate parameter combinations
+        param_names = list(parameter_sweep.keys())
+        param_values = list(parameter_sweep.values())
+        combinations = list(product(*param_values))
+        
+        self.logger.info(
+            f"Starting research campaign {campaign_id} with {len(combinations)} experiments"
+        )
+        
+        job_ids = []
+        
+        for i, combo in enumerate(combinations):
+            # Create experiment config
+            exp_config = base_config.copy()
+            
+            for param_name, param_value in zip(param_names, combo):
+                if '.' in param_name:
+                    keys = param_name.split('.')
+                    current = exp_config
+                    for key in keys[:-1]:
+                        if key not in current:
+                            current[key] = {}
+                        current = current[key]
+                    current[keys[-1]] = param_value
+                else:
+                    exp_config[param_name] = param_value
+            
+            # Optimize resources
+            model_config = exp_config.get('model', {})
+            dataset_size = exp_config.get('dataset', {}).get('size', 10000)
+            
+            slurm_config = self.optimizer.optimize_resource_allocation(
+                model_config, dataset_size
+            )
+            slurm_config.job_name = f"{campaign_name}_exp_{i:04d}"
+            
+            # Submit job
+            try:
+                job_id = self.slurm.submit_job(
+                    config=slurm_config,
+                    python_script="train_probabilistic_no.py",
+                    script_args=["--config", json.dumps(exp_config)]
+                )
+                
+                if job_id:
+                    job_ids.append(job_id)
+                    self.logger.info(
+                        f"Submitted experiment {i+1}/{len(combinations)}: {job_id}"
+                    )
+            
+            except Exception as e:
+                self.logger.error(f"Failed to submit experiment {i}: {e}")
+        
+        # Store campaign info
+        campaign_info = {
+            'campaign_id': campaign_id,
+            'start_time': time.time(),
+            'base_config': base_config,
+            'parameter_sweep': parameter_sweep,
+            'job_ids': job_ids,
+            'status': 'running'
+        }
+        
+        self._active_campaigns[campaign_id] = campaign_info
+        
+        return campaign_id
+    
+    def monitor_campaign_progress(self, campaign_id: str) -> Dict[str, Any]:
+        """Monitor research campaign progress."""
+        if campaign_id not in self._active_campaigns:
+            return {'error': f'Campaign {campaign_id} not found'}
+        
+        campaign_info = self._active_campaigns[campaign_id]
+        job_ids = campaign_info['job_ids']
+        
+        # Check job statuses
+        status_counts = {'PENDING': 0, 'RUNNING': 0, 'COMPLETED': 0, 'FAILED': 0}
+        
+        for job_id in job_ids:
+            status = self.slurm.get_job_status(job_id)
+            if status:
+                state = status.get('state', 'UNKNOWN')
+                status_counts[state] = status_counts.get(state, 0) + 1
+        
+        # Calculate progress
+        total_jobs = len(job_ids)
+        completed = status_counts.get('COMPLETED', 0)
+        progress_pct = (completed / total_jobs) * 100 if total_jobs > 0 else 0
+        
+        return {
+            'campaign_id': campaign_id,
+            'total_experiments': total_jobs,
+            'completed': completed,
+            'progress_percent': progress_pct,
+            'status_breakdown': status_counts,
+            'runtime_hours': (time.time() - campaign_info['start_time']) / 3600
+        }
+
+
+# Advanced HPC utility functions
+
+def create_distributed_training_script(model_config: Dict[str, Any],
+                                      output_path: str = "distributed_train.py") -> str:
+    """Generate distributed training script for HPC deployment.
+    
+    Args:
+        model_config: Model configuration
+        output_path: Output script path
+        
+    Returns:
+        Path to generated script
+    """
+    script_content = f'''
+#!/usr/bin/env python
+"""Distributed probabilistic neural operator training script for HPC."""
+
+import os
+import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+
+from probneural_operator.models.fno import ProbabilisticFNO
+from probneural_operator.scaling.distributed_training import (
+    DistributedConfig, DistributedUncertaintyTrainer
+)
+
+def main():
+    # Initialize distributed training
+    config = DistributedConfig()
+    
+    # Create model
+    model = ProbabilisticFNO(
+        input_dim={model_config.get('input_dim', 1)},
+        output_dim={model_config.get('output_dim', 1)},
+        modes={model_config.get('modes', 12)},
+        width={model_config.get('width', 64)},
+        depth={model_config.get('depth', 4)},
+        spatial_dim={model_config.get('spatial_dim', 2)}
+    )
+    
+    # Create distributed trainer
+    trainer = DistributedUncertaintyTrainer(model, config)
+    
+    # Load data and train (implementation specific)
+    print(f"Training started on rank {{config.rank}}/{{config.world_size}}")
+    
+    # Training implementation would go here
+    # trainer.train(train_loader, val_loader, epochs=100)
+
+if __name__ == "__main__":
+    main()
+'''
+    
+    with open(output_path, 'w') as f:
+        f.write(script_content)
+    
+    os.chmod(output_path, 0o755)
+    return output_path
+
+
+def estimate_hpc_costs(model_config: Dict[str, Any],
+                      dataset_size: int,
+                      training_hours: float,
+                      gpu_type: str = "a100") -> Dict[str, float]:
+    """Estimate HPC computational costs."""
+    
+    gpu_costs_per_hour = {
+        'v100': 3.00,
+        'a100': 4.50,
+        'rtx3090': 1.20,
+        'h100': 6.00
+    }
+    
+    optimizer = HPCResourceOptimizer()
+    config = optimizer.optimize_resource_allocation(model_config, dataset_size, training_hours)
+    
+    total_gpus = config.nodes * config.gpus_per_node
+    gpu_cost_per_hour = gpu_costs_per_hour.get(config.gpu_type or gpu_type, 3.00)
+    
+    total_gpu_hours = total_gpus * training_hours
+    compute_cost = total_gpu_hours * gpu_cost_per_hour
+    
+    # Add additional costs
+    storage_cost = dataset_size * 1e-6  # $1 per TB
+    network_cost = compute_cost * 0.03  # 3% of compute for network
+    
+    return {
+        'total_cost': compute_cost + storage_cost + network_cost,
+        'compute_cost': compute_cost,
+        'storage_cost': storage_cost,
+        'network_cost': network_cost,
+        'total_gpu_hours': total_gpu_hours,
+        'estimated_config': config.__dict__
+    }
     
     def initialize_mpi(self):
         """Initialize MPI environment."""
         if not self.mpi_available:
             return False
+
+
+# ========== ADVANCED HPC ENHANCEMENTS ==========
+
+class HPCResourceOptimizer:
+    """Advanced resource optimizer for HPC neural operator training."""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self._optimization_cache = {}
+    
+    def optimize_resource_allocation(self,
+                                   model_config: Dict[str, Any],
+                                   dataset_size: int,
+                                   target_time_hours: float = 24.0) -> SLURMJobConfig:
+        """Optimize resource allocation for neural operator training.
+        
+        Args:
+            model_config: Model configuration parameters
+            dataset_size: Training dataset size
+            target_time_hours: Target training time in hours
+            
+        Returns:
+            Optimized SLURM job configuration
+        """
+        # Create cache key
+        cache_key = json.dumps({
+            'model': model_config,
+            'dataset_size': dataset_size,
+            'target_time': target_time_hours
+        }, sort_keys=True)
+        
+        if cache_key in self._optimization_cache:
+            self.logger.info("Using cached optimization result")
+            return self._optimization_cache[cache_key]
+        
+        # Estimate computational requirements
+        width = model_config.get('width', 64)
+        depth = model_config.get('depth', 4)
+        modes = model_config.get('modes', 12)
+        spatial_dim = model_config.get('spatial_dim', 2)
+        batch_size = model_config.get('batch_size', 32)
+        
+        # Parameter count estimation
+        param_count = width * width * depth + width * (modes ** spatial_dim)
+        
+        # Memory estimation (GB)
+        model_memory = param_count * 4 * 3 / (1024**3)  # model + grads + optimizer
+        batch_memory = batch_size * width * (64**spatial_dim) * 4 / (1024**3)
+        total_memory = model_memory + batch_memory + 4  # 4GB safety buffer
+        
+        # Determine optimal configuration
+        if total_memory <= 16:  # Single GPU
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=1,
+                gpus_per_node=1,
+                gpu_type="v100",
+                mem_per_cpu="16G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        elif total_memory <= 64:  # Multi-GPU single node
+            gpus_needed = max(1, int(total_memory / 16))
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=gpus_needed,
+                gpus_per_node=gpus_needed,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        else:  # Multi-node
+            nodes_needed = max(1, int(total_memory / 64))
+            config = SLURMJobConfig(
+                nodes=nodes_needed,
+                ntasks_per_node=4,  # 4 GPUs per node
+                gpus_per_node=4,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours * 1.2):02d}:00:00"  # 20% buffer for multi-node
+            )
+        
+        # Cache result
+        self._optimization_cache[cache_key] = config
+        
+        self.logger.info(
+            f"Optimized resource allocation: {config.nodes}x{config.gpus_per_node} {config.gpu_type}, "
+            f"Est. memory: {total_memory:.1f}GB"
+        )
+        
+        return config
+
+
+class HPCWorkflowManager:
+    """High-level workflow management for neural operator research campaigns."""
+    
+    def __init__(self, slurm_integration: SLURMIntegration):
+        self.slurm = slurm_integration
+        self.optimizer = HPCResourceOptimizer()
+        self.logger = logging.getLogger(__name__)
+        self._active_campaigns = {}
+    
+    def submit_research_campaign(self,
+                               base_config: Dict[str, Any],
+                               parameter_sweep: Dict[str, List[Any]],
+                               campaign_name: str = "neural_operator_research") -> str:
+        """Submit a large-scale research campaign.
+        
+        Args:
+            base_config: Base experimental configuration
+            parameter_sweep: Parameters to sweep over
+            campaign_name: Campaign identifier
+            
+        Returns:
+            Campaign ID
+        """
+        from itertools import product
+        
+        campaign_id = f"{campaign_name}_{int(time.time())}"
+        
+        # Generate parameter combinations
+        param_names = list(parameter_sweep.keys())
+        param_values = list(parameter_sweep.values())
+        combinations = list(product(*param_values))
+        
+        self.logger.info(
+            f"Starting research campaign {campaign_id} with {len(combinations)} experiments"
+        )
+        
+        job_ids = []
+        
+        for i, combo in enumerate(combinations):
+            # Create experiment config
+            exp_config = base_config.copy()
+            
+            for param_name, param_value in zip(param_names, combo):
+                if '.' in param_name:
+                    keys = param_name.split('.')
+                    current = exp_config
+                    for key in keys[:-1]:
+                        if key not in current:
+                            current[key] = {}
+                        current = current[key]
+                    current[keys[-1]] = param_value
+                else:
+                    exp_config[param_name] = param_value
+            
+            # Optimize resources
+            model_config = exp_config.get('model', {})
+            dataset_size = exp_config.get('dataset', {}).get('size', 10000)
+            
+            slurm_config = self.optimizer.optimize_resource_allocation(
+                model_config, dataset_size
+            )
+            slurm_config.job_name = f"{campaign_name}_exp_{i:04d}"
+            
+            # Submit job
+            try:
+                job_id = self.slurm.submit_job(
+                    config=slurm_config,
+                    python_script="train_probabilistic_no.py",
+                    script_args=["--config", json.dumps(exp_config)]
+                )
+                
+                if job_id:
+                    job_ids.append(job_id)
+                    self.logger.info(
+                        f"Submitted experiment {i+1}/{len(combinations)}: {job_id}"
+                    )
+            
+            except Exception as e:
+                self.logger.error(f"Failed to submit experiment {i}: {e}")
+        
+        # Store campaign info
+        campaign_info = {
+            'campaign_id': campaign_id,
+            'start_time': time.time(),
+            'base_config': base_config,
+            'parameter_sweep': parameter_sweep,
+            'job_ids': job_ids,
+            'status': 'running'
+        }
+        
+        self._active_campaigns[campaign_id] = campaign_info
+        
+        return campaign_id
+    
+    def monitor_campaign_progress(self, campaign_id: str) -> Dict[str, Any]:
+        """Monitor research campaign progress."""
+        if campaign_id not in self._active_campaigns:
+            return {'error': f'Campaign {campaign_id} not found'}
+        
+        campaign_info = self._active_campaigns[campaign_id]
+        job_ids = campaign_info['job_ids']
+        
+        # Check job statuses
+        status_counts = {'PENDING': 0, 'RUNNING': 0, 'COMPLETED': 0, 'FAILED': 0}
+        
+        for job_id in job_ids:
+            status = self.slurm.get_job_status(job_id)
+            if status:
+                state = status.get('state', 'UNKNOWN')
+                status_counts[state] = status_counts.get(state, 0) + 1
+        
+        # Calculate progress
+        total_jobs = len(job_ids)
+        completed = status_counts.get('COMPLETED', 0)
+        progress_pct = (completed / total_jobs) * 100 if total_jobs > 0 else 0
+        
+        return {
+            'campaign_id': campaign_id,
+            'total_experiments': total_jobs,
+            'completed': completed,
+            'progress_percent': progress_pct,
+            'status_breakdown': status_counts,
+            'runtime_hours': (time.time() - campaign_info['start_time']) / 3600
+        }
+
+
+# Advanced HPC utility functions
+
+def create_distributed_training_script(model_config: Dict[str, Any],
+                                      output_path: str = "distributed_train.py") -> str:
+    """Generate distributed training script for HPC deployment.
+    
+    Args:
+        model_config: Model configuration
+        output_path: Output script path
+        
+    Returns:
+        Path to generated script
+    """
+    script_content = f'''
+#!/usr/bin/env python
+"""Distributed probabilistic neural operator training script for HPC."""
+
+import os
+import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+
+from probneural_operator.models.fno import ProbabilisticFNO
+from probneural_operator.scaling.distributed_training import (
+    DistributedConfig, DistributedUncertaintyTrainer
+)
+
+def main():
+    # Initialize distributed training
+    config = DistributedConfig()
+    
+    # Create model
+    model = ProbabilisticFNO(
+        input_dim={model_config.get('input_dim', 1)},
+        output_dim={model_config.get('output_dim', 1)},
+        modes={model_config.get('modes', 12)},
+        width={model_config.get('width', 64)},
+        depth={model_config.get('depth', 4)},
+        spatial_dim={model_config.get('spatial_dim', 2)}
+    )
+    
+    # Create distributed trainer
+    trainer = DistributedUncertaintyTrainer(model, config)
+    
+    # Load data and train (implementation specific)
+    print(f"Training started on rank {{config.rank}}/{{config.world_size}}")
+    
+    # Training implementation would go here
+    # trainer.train(train_loader, val_loader, epochs=100)
+
+if __name__ == "__main__":
+    main()
+'''
+    
+    with open(output_path, 'w') as f:
+        f.write(script_content)
+    
+    os.chmod(output_path, 0o755)
+    return output_path
+
+
+def estimate_hpc_costs(model_config: Dict[str, Any],
+                      dataset_size: int,
+                      training_hours: float,
+                      gpu_type: str = "a100") -> Dict[str, float]:
+    """Estimate HPC computational costs."""
+    
+    gpu_costs_per_hour = {
+        'v100': 3.00,
+        'a100': 4.50,
+        'rtx3090': 1.20,
+        'h100': 6.00
+    }
+    
+    optimizer = HPCResourceOptimizer()
+    config = optimizer.optimize_resource_allocation(model_config, dataset_size, training_hours)
+    
+    total_gpus = config.nodes * config.gpus_per_node
+    gpu_cost_per_hour = gpu_costs_per_hour.get(config.gpu_type or gpu_type, 3.00)
+    
+    total_gpu_hours = total_gpus * training_hours
+    compute_cost = total_gpu_hours * gpu_cost_per_hour
+    
+    # Add additional costs
+    storage_cost = dataset_size * 1e-6  # $1 per TB
+    network_cost = compute_cost * 0.03  # 3% of compute for network
+    
+    return {
+        'total_cost': compute_cost + storage_cost + network_cost,
+        'compute_cost': compute_cost,
+        'storage_cost': storage_cost,
+        'network_cost': network_cost,
+        'total_gpu_hours': total_gpu_hours,
+        'estimated_config': config.__dict__
+    }
         
         try:
             # Initialize PyTorch distributed with MPI
@@ -609,8 +2179,636 @@ class MPIDistributedTrainer:
         except Exception as e:
             logging.error(f"MPI initialization failed: {e}")
             return False
+
+
+# ========== ADVANCED HPC ENHANCEMENTS ==========
+
+class HPCResourceOptimizer:
+    """Advanced resource optimizer for HPC neural operator training."""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self._optimization_cache = {}
+    
+    def optimize_resource_allocation(self,
+                                   model_config: Dict[str, Any],
+                                   dataset_size: int,
+                                   target_time_hours: float = 24.0) -> SLURMJobConfig:
+        """Optimize resource allocation for neural operator training.
+        
+        Args:
+            model_config: Model configuration parameters
+            dataset_size: Training dataset size
+            target_time_hours: Target training time in hours
+            
+        Returns:
+            Optimized SLURM job configuration
+        """
+        # Create cache key
+        cache_key = json.dumps({
+            'model': model_config,
+            'dataset_size': dataset_size,
+            'target_time': target_time_hours
+        }, sort_keys=True)
+        
+        if cache_key in self._optimization_cache:
+            self.logger.info("Using cached optimization result")
+            return self._optimization_cache[cache_key]
+        
+        # Estimate computational requirements
+        width = model_config.get('width', 64)
+        depth = model_config.get('depth', 4)
+        modes = model_config.get('modes', 12)
+        spatial_dim = model_config.get('spatial_dim', 2)
+        batch_size = model_config.get('batch_size', 32)
+        
+        # Parameter count estimation
+        param_count = width * width * depth + width * (modes ** spatial_dim)
+        
+        # Memory estimation (GB)
+        model_memory = param_count * 4 * 3 / (1024**3)  # model + grads + optimizer
+        batch_memory = batch_size * width * (64**spatial_dim) * 4 / (1024**3)
+        total_memory = model_memory + batch_memory + 4  # 4GB safety buffer
+        
+        # Determine optimal configuration
+        if total_memory <= 16:  # Single GPU
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=1,
+                gpus_per_node=1,
+                gpu_type="v100",
+                mem_per_cpu="16G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        elif total_memory <= 64:  # Multi-GPU single node
+            gpus_needed = max(1, int(total_memory / 16))
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=gpus_needed,
+                gpus_per_node=gpus_needed,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        else:  # Multi-node
+            nodes_needed = max(1, int(total_memory / 64))
+            config = SLURMJobConfig(
+                nodes=nodes_needed,
+                ntasks_per_node=4,  # 4 GPUs per node
+                gpus_per_node=4,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours * 1.2):02d}:00:00"  # 20% buffer for multi-node
+            )
+        
+        # Cache result
+        self._optimization_cache[cache_key] = config
+        
+        self.logger.info(
+            f"Optimized resource allocation: {config.nodes}x{config.gpus_per_node} {config.gpu_type}, "
+            f"Est. memory: {total_memory:.1f}GB"
+        )
+        
+        return config
+
+
+class HPCWorkflowManager:
+    """High-level workflow management for neural operator research campaigns."""
+    
+    def __init__(self, slurm_integration: SLURMIntegration):
+        self.slurm = slurm_integration
+        self.optimizer = HPCResourceOptimizer()
+        self.logger = logging.getLogger(__name__)
+        self._active_campaigns = {}
+    
+    def submit_research_campaign(self,
+                               base_config: Dict[str, Any],
+                               parameter_sweep: Dict[str, List[Any]],
+                               campaign_name: str = "neural_operator_research") -> str:
+        """Submit a large-scale research campaign.
+        
+        Args:
+            base_config: Base experimental configuration
+            parameter_sweep: Parameters to sweep over
+            campaign_name: Campaign identifier
+            
+        Returns:
+            Campaign ID
+        """
+        from itertools import product
+        
+        campaign_id = f"{campaign_name}_{int(time.time())}"
+        
+        # Generate parameter combinations
+        param_names = list(parameter_sweep.keys())
+        param_values = list(parameter_sweep.values())
+        combinations = list(product(*param_values))
+        
+        self.logger.info(
+            f"Starting research campaign {campaign_id} with {len(combinations)} experiments"
+        )
+        
+        job_ids = []
+        
+        for i, combo in enumerate(combinations):
+            # Create experiment config
+            exp_config = base_config.copy()
+            
+            for param_name, param_value in zip(param_names, combo):
+                if '.' in param_name:
+                    keys = param_name.split('.')
+                    current = exp_config
+                    for key in keys[:-1]:
+                        if key not in current:
+                            current[key] = {}
+                        current = current[key]
+                    current[keys[-1]] = param_value
+                else:
+                    exp_config[param_name] = param_value
+            
+            # Optimize resources
+            model_config = exp_config.get('model', {})
+            dataset_size = exp_config.get('dataset', {}).get('size', 10000)
+            
+            slurm_config = self.optimizer.optimize_resource_allocation(
+                model_config, dataset_size
+            )
+            slurm_config.job_name = f"{campaign_name}_exp_{i:04d}"
+            
+            # Submit job
+            try:
+                job_id = self.slurm.submit_job(
+                    config=slurm_config,
+                    python_script="train_probabilistic_no.py",
+                    script_args=["--config", json.dumps(exp_config)]
+                )
+                
+                if job_id:
+                    job_ids.append(job_id)
+                    self.logger.info(
+                        f"Submitted experiment {i+1}/{len(combinations)}: {job_id}"
+                    )
+            
+            except Exception as e:
+                self.logger.error(f"Failed to submit experiment {i}: {e}")
+        
+        # Store campaign info
+        campaign_info = {
+            'campaign_id': campaign_id,
+            'start_time': time.time(),
+            'base_config': base_config,
+            'parameter_sweep': parameter_sweep,
+            'job_ids': job_ids,
+            'status': 'running'
+        }
+        
+        self._active_campaigns[campaign_id] = campaign_info
+        
+        return campaign_id
+    
+    def monitor_campaign_progress(self, campaign_id: str) -> Dict[str, Any]:
+        """Monitor research campaign progress."""
+        if campaign_id not in self._active_campaigns:
+            return {'error': f'Campaign {campaign_id} not found'}
+        
+        campaign_info = self._active_campaigns[campaign_id]
+        job_ids = campaign_info['job_ids']
+        
+        # Check job statuses
+        status_counts = {'PENDING': 0, 'RUNNING': 0, 'COMPLETED': 0, 'FAILED': 0}
+        
+        for job_id in job_ids:
+            status = self.slurm.get_job_status(job_id)
+            if status:
+                state = status.get('state', 'UNKNOWN')
+                status_counts[state] = status_counts.get(state, 0) + 1
+        
+        # Calculate progress
+        total_jobs = len(job_ids)
+        completed = status_counts.get('COMPLETED', 0)
+        progress_pct = (completed / total_jobs) * 100 if total_jobs > 0 else 0
+        
+        return {
+            'campaign_id': campaign_id,
+            'total_experiments': total_jobs,
+            'completed': completed,
+            'progress_percent': progress_pct,
+            'status_breakdown': status_counts,
+            'runtime_hours': (time.time() - campaign_info['start_time']) / 3600
+        }
+
+
+# Advanced HPC utility functions
+
+def create_distributed_training_script(model_config: Dict[str, Any],
+                                      output_path: str = "distributed_train.py") -> str:
+    """Generate distributed training script for HPC deployment.
+    
+    Args:
+        model_config: Model configuration
+        output_path: Output script path
+        
+    Returns:
+        Path to generated script
+    """
+    script_content = f'''
+#!/usr/bin/env python
+"""Distributed probabilistic neural operator training script for HPC."""
+
+import os
+import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+
+from probneural_operator.models.fno import ProbabilisticFNO
+from probneural_operator.scaling.distributed_training import (
+    DistributedConfig, DistributedUncertaintyTrainer
+)
+
+def main():
+    # Initialize distributed training
+    config = DistributedConfig()
+    
+    # Create model
+    model = ProbabilisticFNO(
+        input_dim={model_config.get('input_dim', 1)},
+        output_dim={model_config.get('output_dim', 1)},
+        modes={model_config.get('modes', 12)},
+        width={model_config.get('width', 64)},
+        depth={model_config.get('depth', 4)},
+        spatial_dim={model_config.get('spatial_dim', 2)}
+    )
+    
+    # Create distributed trainer
+    trainer = DistributedUncertaintyTrainer(model, config)
+    
+    # Load data and train (implementation specific)
+    print(f"Training started on rank {{config.rank}}/{{config.world_size}}")
+    
+    # Training implementation would go here
+    # trainer.train(train_loader, val_loader, epochs=100)
+
+if __name__ == "__main__":
+    main()
+'''
+    
+    with open(output_path, 'w') as f:
+        f.write(script_content)
+    
+    os.chmod(output_path, 0o755)
+    return output_path
+
+
+def estimate_hpc_costs(model_config: Dict[str, Any],
+                      dataset_size: int,
+                      training_hours: float,
+                      gpu_type: str = "a100") -> Dict[str, float]:
+    """Estimate HPC computational costs."""
+    
+    gpu_costs_per_hour = {
+        'v100': 3.00,
+        'a100': 4.50,
+        'rtx3090': 1.20,
+        'h100': 6.00
+    }
+    
+    optimizer = HPCResourceOptimizer()
+    config = optimizer.optimize_resource_allocation(model_config, dataset_size, training_hours)
+    
+    total_gpus = config.nodes * config.gpus_per_node
+    gpu_cost_per_hour = gpu_costs_per_hour.get(config.gpu_type or gpu_type, 3.00)
+    
+    total_gpu_hours = total_gpus * training_hours
+    compute_cost = total_gpu_hours * gpu_cost_per_hour
+    
+    # Add additional costs
+    storage_cost = dataset_size * 1e-6  # $1 per TB
+    network_cost = compute_cost * 0.03  # 3% of compute for network
+    
+    return {
+        'total_cost': compute_cost + storage_cost + network_cost,
+        'compute_cost': compute_cost,
+        'storage_cost': storage_cost,
+        'network_cost': network_cost,
+        'total_gpu_hours': total_gpu_hours,
+        'estimated_config': config.__dict__
+    }
         
         return False
+
+
+# ========== ADVANCED HPC ENHANCEMENTS ==========
+
+class HPCResourceOptimizer:
+    """Advanced resource optimizer for HPC neural operator training."""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self._optimization_cache = {}
+    
+    def optimize_resource_allocation(self,
+                                   model_config: Dict[str, Any],
+                                   dataset_size: int,
+                                   target_time_hours: float = 24.0) -> SLURMJobConfig:
+        """Optimize resource allocation for neural operator training.
+        
+        Args:
+            model_config: Model configuration parameters
+            dataset_size: Training dataset size
+            target_time_hours: Target training time in hours
+            
+        Returns:
+            Optimized SLURM job configuration
+        """
+        # Create cache key
+        cache_key = json.dumps({
+            'model': model_config,
+            'dataset_size': dataset_size,
+            'target_time': target_time_hours
+        }, sort_keys=True)
+        
+        if cache_key in self._optimization_cache:
+            self.logger.info("Using cached optimization result")
+            return self._optimization_cache[cache_key]
+        
+        # Estimate computational requirements
+        width = model_config.get('width', 64)
+        depth = model_config.get('depth', 4)
+        modes = model_config.get('modes', 12)
+        spatial_dim = model_config.get('spatial_dim', 2)
+        batch_size = model_config.get('batch_size', 32)
+        
+        # Parameter count estimation
+        param_count = width * width * depth + width * (modes ** spatial_dim)
+        
+        # Memory estimation (GB)
+        model_memory = param_count * 4 * 3 / (1024**3)  # model + grads + optimizer
+        batch_memory = batch_size * width * (64**spatial_dim) * 4 / (1024**3)
+        total_memory = model_memory + batch_memory + 4  # 4GB safety buffer
+        
+        # Determine optimal configuration
+        if total_memory <= 16:  # Single GPU
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=1,
+                gpus_per_node=1,
+                gpu_type="v100",
+                mem_per_cpu="16G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        elif total_memory <= 64:  # Multi-GPU single node
+            gpus_needed = max(1, int(total_memory / 16))
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=gpus_needed,
+                gpus_per_node=gpus_needed,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        else:  # Multi-node
+            nodes_needed = max(1, int(total_memory / 64))
+            config = SLURMJobConfig(
+                nodes=nodes_needed,
+                ntasks_per_node=4,  # 4 GPUs per node
+                gpus_per_node=4,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours * 1.2):02d}:00:00"  # 20% buffer for multi-node
+            )
+        
+        # Cache result
+        self._optimization_cache[cache_key] = config
+        
+        self.logger.info(
+            f"Optimized resource allocation: {config.nodes}x{config.gpus_per_node} {config.gpu_type}, "
+            f"Est. memory: {total_memory:.1f}GB"
+        )
+        
+        return config
+
+
+class HPCWorkflowManager:
+    """High-level workflow management for neural operator research campaigns."""
+    
+    def __init__(self, slurm_integration: SLURMIntegration):
+        self.slurm = slurm_integration
+        self.optimizer = HPCResourceOptimizer()
+        self.logger = logging.getLogger(__name__)
+        self._active_campaigns = {}
+    
+    def submit_research_campaign(self,
+                               base_config: Dict[str, Any],
+                               parameter_sweep: Dict[str, List[Any]],
+                               campaign_name: str = "neural_operator_research") -> str:
+        """Submit a large-scale research campaign.
+        
+        Args:
+            base_config: Base experimental configuration
+            parameter_sweep: Parameters to sweep over
+            campaign_name: Campaign identifier
+            
+        Returns:
+            Campaign ID
+        """
+        from itertools import product
+        
+        campaign_id = f"{campaign_name}_{int(time.time())}"
+        
+        # Generate parameter combinations
+        param_names = list(parameter_sweep.keys())
+        param_values = list(parameter_sweep.values())
+        combinations = list(product(*param_values))
+        
+        self.logger.info(
+            f"Starting research campaign {campaign_id} with {len(combinations)} experiments"
+        )
+        
+        job_ids = []
+        
+        for i, combo in enumerate(combinations):
+            # Create experiment config
+            exp_config = base_config.copy()
+            
+            for param_name, param_value in zip(param_names, combo):
+                if '.' in param_name:
+                    keys = param_name.split('.')
+                    current = exp_config
+                    for key in keys[:-1]:
+                        if key not in current:
+                            current[key] = {}
+                        current = current[key]
+                    current[keys[-1]] = param_value
+                else:
+                    exp_config[param_name] = param_value
+            
+            # Optimize resources
+            model_config = exp_config.get('model', {})
+            dataset_size = exp_config.get('dataset', {}).get('size', 10000)
+            
+            slurm_config = self.optimizer.optimize_resource_allocation(
+                model_config, dataset_size
+            )
+            slurm_config.job_name = f"{campaign_name}_exp_{i:04d}"
+            
+            # Submit job
+            try:
+                job_id = self.slurm.submit_job(
+                    config=slurm_config,
+                    python_script="train_probabilistic_no.py",
+                    script_args=["--config", json.dumps(exp_config)]
+                )
+                
+                if job_id:
+                    job_ids.append(job_id)
+                    self.logger.info(
+                        f"Submitted experiment {i+1}/{len(combinations)}: {job_id}"
+                    )
+            
+            except Exception as e:
+                self.logger.error(f"Failed to submit experiment {i}: {e}")
+        
+        # Store campaign info
+        campaign_info = {
+            'campaign_id': campaign_id,
+            'start_time': time.time(),
+            'base_config': base_config,
+            'parameter_sweep': parameter_sweep,
+            'job_ids': job_ids,
+            'status': 'running'
+        }
+        
+        self._active_campaigns[campaign_id] = campaign_info
+        
+        return campaign_id
+    
+    def monitor_campaign_progress(self, campaign_id: str) -> Dict[str, Any]:
+        """Monitor research campaign progress."""
+        if campaign_id not in self._active_campaigns:
+            return {'error': f'Campaign {campaign_id} not found'}
+        
+        campaign_info = self._active_campaigns[campaign_id]
+        job_ids = campaign_info['job_ids']
+        
+        # Check job statuses
+        status_counts = {'PENDING': 0, 'RUNNING': 0, 'COMPLETED': 0, 'FAILED': 0}
+        
+        for job_id in job_ids:
+            status = self.slurm.get_job_status(job_id)
+            if status:
+                state = status.get('state', 'UNKNOWN')
+                status_counts[state] = status_counts.get(state, 0) + 1
+        
+        # Calculate progress
+        total_jobs = len(job_ids)
+        completed = status_counts.get('COMPLETED', 0)
+        progress_pct = (completed / total_jobs) * 100 if total_jobs > 0 else 0
+        
+        return {
+            'campaign_id': campaign_id,
+            'total_experiments': total_jobs,
+            'completed': completed,
+            'progress_percent': progress_pct,
+            'status_breakdown': status_counts,
+            'runtime_hours': (time.time() - campaign_info['start_time']) / 3600
+        }
+
+
+# Advanced HPC utility functions
+
+def create_distributed_training_script(model_config: Dict[str, Any],
+                                      output_path: str = "distributed_train.py") -> str:
+    """Generate distributed training script for HPC deployment.
+    
+    Args:
+        model_config: Model configuration
+        output_path: Output script path
+        
+    Returns:
+        Path to generated script
+    """
+    script_content = f'''
+#!/usr/bin/env python
+"""Distributed probabilistic neural operator training script for HPC."""
+
+import os
+import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+
+from probneural_operator.models.fno import ProbabilisticFNO
+from probneural_operator.scaling.distributed_training import (
+    DistributedConfig, DistributedUncertaintyTrainer
+)
+
+def main():
+    # Initialize distributed training
+    config = DistributedConfig()
+    
+    # Create model
+    model = ProbabilisticFNO(
+        input_dim={model_config.get('input_dim', 1)},
+        output_dim={model_config.get('output_dim', 1)},
+        modes={model_config.get('modes', 12)},
+        width={model_config.get('width', 64)},
+        depth={model_config.get('depth', 4)},
+        spatial_dim={model_config.get('spatial_dim', 2)}
+    )
+    
+    # Create distributed trainer
+    trainer = DistributedUncertaintyTrainer(model, config)
+    
+    # Load data and train (implementation specific)
+    print(f"Training started on rank {{config.rank}}/{{config.world_size}}")
+    
+    # Training implementation would go here
+    # trainer.train(train_loader, val_loader, epochs=100)
+
+if __name__ == "__main__":
+    main()
+'''
+    
+    with open(output_path, 'w') as f:
+        f.write(script_content)
+    
+    os.chmod(output_path, 0o755)
+    return output_path
+
+
+def estimate_hpc_costs(model_config: Dict[str, Any],
+                      dataset_size: int,
+                      training_hours: float,
+                      gpu_type: str = "a100") -> Dict[str, float]:
+    """Estimate HPC computational costs."""
+    
+    gpu_costs_per_hour = {
+        'v100': 3.00,
+        'a100': 4.50,
+        'rtx3090': 1.20,
+        'h100': 6.00
+    }
+    
+    optimizer = HPCResourceOptimizer()
+    config = optimizer.optimize_resource_allocation(model_config, dataset_size, training_hours)
+    
+    total_gpus = config.nodes * config.gpus_per_node
+    gpu_cost_per_hour = gpu_costs_per_hour.get(config.gpu_type or gpu_type, 3.00)
+    
+    total_gpu_hours = total_gpus * training_hours
+    compute_cost = total_gpu_hours * gpu_cost_per_hour
+    
+    # Add additional costs
+    storage_cost = dataset_size * 1e-6  # $1 per TB
+    network_cost = compute_cost * 0.03  # 3% of compute for network
+    
+    return {
+        'total_cost': compute_cost + storage_cost + network_cost,
+        'compute_cost': compute_cost,
+        'storage_cost': storage_cost,
+        'network_cost': network_cost,
+        'total_gpu_hours': total_gpu_hours,
+        'estimated_config': config.__dict__
+    }
     
     def cleanup_mpi(self):
         """Cleanup MPI environment."""
@@ -1090,6 +3288,320 @@ class JobScheduler:
                 return (used_gpus + required_gpus) <= available_gpus
             else:
                 return False
+
+
+# ========== ADVANCED HPC ENHANCEMENTS ==========
+
+class HPCResourceOptimizer:
+    """Advanced resource optimizer for HPC neural operator training."""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self._optimization_cache = {}
+    
+    def optimize_resource_allocation(self,
+                                   model_config: Dict[str, Any],
+                                   dataset_size: int,
+                                   target_time_hours: float = 24.0) -> SLURMJobConfig:
+        """Optimize resource allocation for neural operator training.
+        
+        Args:
+            model_config: Model configuration parameters
+            dataset_size: Training dataset size
+            target_time_hours: Target training time in hours
+            
+        Returns:
+            Optimized SLURM job configuration
+        """
+        # Create cache key
+        cache_key = json.dumps({
+            'model': model_config,
+            'dataset_size': dataset_size,
+            'target_time': target_time_hours
+        }, sort_keys=True)
+        
+        if cache_key in self._optimization_cache:
+            self.logger.info("Using cached optimization result")
+            return self._optimization_cache[cache_key]
+        
+        # Estimate computational requirements
+        width = model_config.get('width', 64)
+        depth = model_config.get('depth', 4)
+        modes = model_config.get('modes', 12)
+        spatial_dim = model_config.get('spatial_dim', 2)
+        batch_size = model_config.get('batch_size', 32)
+        
+        # Parameter count estimation
+        param_count = width * width * depth + width * (modes ** spatial_dim)
+        
+        # Memory estimation (GB)
+        model_memory = param_count * 4 * 3 / (1024**3)  # model + grads + optimizer
+        batch_memory = batch_size * width * (64**spatial_dim) * 4 / (1024**3)
+        total_memory = model_memory + batch_memory + 4  # 4GB safety buffer
+        
+        # Determine optimal configuration
+        if total_memory <= 16:  # Single GPU
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=1,
+                gpus_per_node=1,
+                gpu_type="v100",
+                mem_per_cpu="16G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        elif total_memory <= 64:  # Multi-GPU single node
+            gpus_needed = max(1, int(total_memory / 16))
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=gpus_needed,
+                gpus_per_node=gpus_needed,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        else:  # Multi-node
+            nodes_needed = max(1, int(total_memory / 64))
+            config = SLURMJobConfig(
+                nodes=nodes_needed,
+                ntasks_per_node=4,  # 4 GPUs per node
+                gpus_per_node=4,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours * 1.2):02d}:00:00"  # 20% buffer for multi-node
+            )
+        
+        # Cache result
+        self._optimization_cache[cache_key] = config
+        
+        self.logger.info(
+            f"Optimized resource allocation: {config.nodes}x{config.gpus_per_node} {config.gpu_type}, "
+            f"Est. memory: {total_memory:.1f}GB"
+        )
+        
+        return config
+
+
+class HPCWorkflowManager:
+    """High-level workflow management for neural operator research campaigns."""
+    
+    def __init__(self, slurm_integration: SLURMIntegration):
+        self.slurm = slurm_integration
+        self.optimizer = HPCResourceOptimizer()
+        self.logger = logging.getLogger(__name__)
+        self._active_campaigns = {}
+    
+    def submit_research_campaign(self,
+                               base_config: Dict[str, Any],
+                               parameter_sweep: Dict[str, List[Any]],
+                               campaign_name: str = "neural_operator_research") -> str:
+        """Submit a large-scale research campaign.
+        
+        Args:
+            base_config: Base experimental configuration
+            parameter_sweep: Parameters to sweep over
+            campaign_name: Campaign identifier
+            
+        Returns:
+            Campaign ID
+        """
+        from itertools import product
+        
+        campaign_id = f"{campaign_name}_{int(time.time())}"
+        
+        # Generate parameter combinations
+        param_names = list(parameter_sweep.keys())
+        param_values = list(parameter_sweep.values())
+        combinations = list(product(*param_values))
+        
+        self.logger.info(
+            f"Starting research campaign {campaign_id} with {len(combinations)} experiments"
+        )
+        
+        job_ids = []
+        
+        for i, combo in enumerate(combinations):
+            # Create experiment config
+            exp_config = base_config.copy()
+            
+            for param_name, param_value in zip(param_names, combo):
+                if '.' in param_name:
+                    keys = param_name.split('.')
+                    current = exp_config
+                    for key in keys[:-1]:
+                        if key not in current:
+                            current[key] = {}
+                        current = current[key]
+                    current[keys[-1]] = param_value
+                else:
+                    exp_config[param_name] = param_value
+            
+            # Optimize resources
+            model_config = exp_config.get('model', {})
+            dataset_size = exp_config.get('dataset', {}).get('size', 10000)
+            
+            slurm_config = self.optimizer.optimize_resource_allocation(
+                model_config, dataset_size
+            )
+            slurm_config.job_name = f"{campaign_name}_exp_{i:04d}"
+            
+            # Submit job
+            try:
+                job_id = self.slurm.submit_job(
+                    config=slurm_config,
+                    python_script="train_probabilistic_no.py",
+                    script_args=["--config", json.dumps(exp_config)]
+                )
+                
+                if job_id:
+                    job_ids.append(job_id)
+                    self.logger.info(
+                        f"Submitted experiment {i+1}/{len(combinations)}: {job_id}"
+                    )
+            
+            except Exception as e:
+                self.logger.error(f"Failed to submit experiment {i}: {e}")
+        
+        # Store campaign info
+        campaign_info = {
+            'campaign_id': campaign_id,
+            'start_time': time.time(),
+            'base_config': base_config,
+            'parameter_sweep': parameter_sweep,
+            'job_ids': job_ids,
+            'status': 'running'
+        }
+        
+        self._active_campaigns[campaign_id] = campaign_info
+        
+        return campaign_id
+    
+    def monitor_campaign_progress(self, campaign_id: str) -> Dict[str, Any]:
+        """Monitor research campaign progress."""
+        if campaign_id not in self._active_campaigns:
+            return {'error': f'Campaign {campaign_id} not found'}
+        
+        campaign_info = self._active_campaigns[campaign_id]
+        job_ids = campaign_info['job_ids']
+        
+        # Check job statuses
+        status_counts = {'PENDING': 0, 'RUNNING': 0, 'COMPLETED': 0, 'FAILED': 0}
+        
+        for job_id in job_ids:
+            status = self.slurm.get_job_status(job_id)
+            if status:
+                state = status.get('state', 'UNKNOWN')
+                status_counts[state] = status_counts.get(state, 0) + 1
+        
+        # Calculate progress
+        total_jobs = len(job_ids)
+        completed = status_counts.get('COMPLETED', 0)
+        progress_pct = (completed / total_jobs) * 100 if total_jobs > 0 else 0
+        
+        return {
+            'campaign_id': campaign_id,
+            'total_experiments': total_jobs,
+            'completed': completed,
+            'progress_percent': progress_pct,
+            'status_breakdown': status_counts,
+            'runtime_hours': (time.time() - campaign_info['start_time']) / 3600
+        }
+
+
+# Advanced HPC utility functions
+
+def create_distributed_training_script(model_config: Dict[str, Any],
+                                      output_path: str = "distributed_train.py") -> str:
+    """Generate distributed training script for HPC deployment.
+    
+    Args:
+        model_config: Model configuration
+        output_path: Output script path
+        
+    Returns:
+        Path to generated script
+    """
+    script_content = f'''
+#!/usr/bin/env python
+"""Distributed probabilistic neural operator training script for HPC."""
+
+import os
+import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+
+from probneural_operator.models.fno import ProbabilisticFNO
+from probneural_operator.scaling.distributed_training import (
+    DistributedConfig, DistributedUncertaintyTrainer
+)
+
+def main():
+    # Initialize distributed training
+    config = DistributedConfig()
+    
+    # Create model
+    model = ProbabilisticFNO(
+        input_dim={model_config.get('input_dim', 1)},
+        output_dim={model_config.get('output_dim', 1)},
+        modes={model_config.get('modes', 12)},
+        width={model_config.get('width', 64)},
+        depth={model_config.get('depth', 4)},
+        spatial_dim={model_config.get('spatial_dim', 2)}
+    )
+    
+    # Create distributed trainer
+    trainer = DistributedUncertaintyTrainer(model, config)
+    
+    # Load data and train (implementation specific)
+    print(f"Training started on rank {{config.rank}}/{{config.world_size}}")
+    
+    # Training implementation would go here
+    # trainer.train(train_loader, val_loader, epochs=100)
+
+if __name__ == "__main__":
+    main()
+'''
+    
+    with open(output_path, 'w') as f:
+        f.write(script_content)
+    
+    os.chmod(output_path, 0o755)
+    return output_path
+
+
+def estimate_hpc_costs(model_config: Dict[str, Any],
+                      dataset_size: int,
+                      training_hours: float,
+                      gpu_type: str = "a100") -> Dict[str, float]:
+    """Estimate HPC computational costs."""
+    
+    gpu_costs_per_hour = {
+        'v100': 3.00,
+        'a100': 4.50,
+        'rtx3090': 1.20,
+        'h100': 6.00
+    }
+    
+    optimizer = HPCResourceOptimizer()
+    config = optimizer.optimize_resource_allocation(model_config, dataset_size, training_hours)
+    
+    total_gpus = config.nodes * config.gpus_per_node
+    gpu_cost_per_hour = gpu_costs_per_hour.get(config.gpu_type or gpu_type, 3.00)
+    
+    total_gpu_hours = total_gpus * training_hours
+    compute_cost = total_gpu_hours * gpu_cost_per_hour
+    
+    # Add additional costs
+    storage_cost = dataset_size * 1e-6  # $1 per TB
+    network_cost = compute_cost * 0.03  # 3% of compute for network
+    
+    return {
+        'total_cost': compute_cost + storage_cost + network_cost,
+        'compute_cost': compute_cost,
+        'storage_cost': storage_cost,
+        'network_cost': network_cost,
+        'total_gpu_hours': total_gpu_hours,
+        'estimated_config': config.__dict__
+    }
         
         return True
     
@@ -1180,3 +3692,317 @@ class JobScheduler:
                 return True
         
         return False
+
+
+# ========== ADVANCED HPC ENHANCEMENTS ==========
+
+class HPCResourceOptimizer:
+    """Advanced resource optimizer for HPC neural operator training."""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self._optimization_cache = {}
+    
+    def optimize_resource_allocation(self,
+                                   model_config: Dict[str, Any],
+                                   dataset_size: int,
+                                   target_time_hours: float = 24.0) -> SLURMJobConfig:
+        """Optimize resource allocation for neural operator training.
+        
+        Args:
+            model_config: Model configuration parameters
+            dataset_size: Training dataset size
+            target_time_hours: Target training time in hours
+            
+        Returns:
+            Optimized SLURM job configuration
+        """
+        # Create cache key
+        cache_key = json.dumps({
+            'model': model_config,
+            'dataset_size': dataset_size,
+            'target_time': target_time_hours
+        }, sort_keys=True)
+        
+        if cache_key in self._optimization_cache:
+            self.logger.info("Using cached optimization result")
+            return self._optimization_cache[cache_key]
+        
+        # Estimate computational requirements
+        width = model_config.get('width', 64)
+        depth = model_config.get('depth', 4)
+        modes = model_config.get('modes', 12)
+        spatial_dim = model_config.get('spatial_dim', 2)
+        batch_size = model_config.get('batch_size', 32)
+        
+        # Parameter count estimation
+        param_count = width * width * depth + width * (modes ** spatial_dim)
+        
+        # Memory estimation (GB)
+        model_memory = param_count * 4 * 3 / (1024**3)  # model + grads + optimizer
+        batch_memory = batch_size * width * (64**spatial_dim) * 4 / (1024**3)
+        total_memory = model_memory + batch_memory + 4  # 4GB safety buffer
+        
+        # Determine optimal configuration
+        if total_memory <= 16:  # Single GPU
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=1,
+                gpus_per_node=1,
+                gpu_type="v100",
+                mem_per_cpu="16G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        elif total_memory <= 64:  # Multi-GPU single node
+            gpus_needed = max(1, int(total_memory / 16))
+            config = SLURMJobConfig(
+                nodes=1,
+                ntasks_per_node=gpus_needed,
+                gpus_per_node=gpus_needed,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours):02d}:00:00"
+            )
+        else:  # Multi-node
+            nodes_needed = max(1, int(total_memory / 64))
+            config = SLURMJobConfig(
+                nodes=nodes_needed,
+                ntasks_per_node=4,  # 4 GPUs per node
+                gpus_per_node=4,
+                gpu_type="a100",
+                mem_per_cpu="32G",
+                time_limit=f"{int(target_time_hours * 1.2):02d}:00:00"  # 20% buffer for multi-node
+            )
+        
+        # Cache result
+        self._optimization_cache[cache_key] = config
+        
+        self.logger.info(
+            f"Optimized resource allocation: {config.nodes}x{config.gpus_per_node} {config.gpu_type}, "
+            f"Est. memory: {total_memory:.1f}GB"
+        )
+        
+        return config
+
+
+class HPCWorkflowManager:
+    """High-level workflow management for neural operator research campaigns."""
+    
+    def __init__(self, slurm_integration: SLURMIntegration):
+        self.slurm = slurm_integration
+        self.optimizer = HPCResourceOptimizer()
+        self.logger = logging.getLogger(__name__)
+        self._active_campaigns = {}
+    
+    def submit_research_campaign(self,
+                               base_config: Dict[str, Any],
+                               parameter_sweep: Dict[str, List[Any]],
+                               campaign_name: str = "neural_operator_research") -> str:
+        """Submit a large-scale research campaign.
+        
+        Args:
+            base_config: Base experimental configuration
+            parameter_sweep: Parameters to sweep over
+            campaign_name: Campaign identifier
+            
+        Returns:
+            Campaign ID
+        """
+        from itertools import product
+        
+        campaign_id = f"{campaign_name}_{int(time.time())}"
+        
+        # Generate parameter combinations
+        param_names = list(parameter_sweep.keys())
+        param_values = list(parameter_sweep.values())
+        combinations = list(product(*param_values))
+        
+        self.logger.info(
+            f"Starting research campaign {campaign_id} with {len(combinations)} experiments"
+        )
+        
+        job_ids = []
+        
+        for i, combo in enumerate(combinations):
+            # Create experiment config
+            exp_config = base_config.copy()
+            
+            for param_name, param_value in zip(param_names, combo):
+                if '.' in param_name:
+                    keys = param_name.split('.')
+                    current = exp_config
+                    for key in keys[:-1]:
+                        if key not in current:
+                            current[key] = {}
+                        current = current[key]
+                    current[keys[-1]] = param_value
+                else:
+                    exp_config[param_name] = param_value
+            
+            # Optimize resources
+            model_config = exp_config.get('model', {})
+            dataset_size = exp_config.get('dataset', {}).get('size', 10000)
+            
+            slurm_config = self.optimizer.optimize_resource_allocation(
+                model_config, dataset_size
+            )
+            slurm_config.job_name = f"{campaign_name}_exp_{i:04d}"
+            
+            # Submit job
+            try:
+                job_id = self.slurm.submit_job(
+                    config=slurm_config,
+                    python_script="train_probabilistic_no.py",
+                    script_args=["--config", json.dumps(exp_config)]
+                )
+                
+                if job_id:
+                    job_ids.append(job_id)
+                    self.logger.info(
+                        f"Submitted experiment {i+1}/{len(combinations)}: {job_id}"
+                    )
+            
+            except Exception as e:
+                self.logger.error(f"Failed to submit experiment {i}: {e}")
+        
+        # Store campaign info
+        campaign_info = {
+            'campaign_id': campaign_id,
+            'start_time': time.time(),
+            'base_config': base_config,
+            'parameter_sweep': parameter_sweep,
+            'job_ids': job_ids,
+            'status': 'running'
+        }
+        
+        self._active_campaigns[campaign_id] = campaign_info
+        
+        return campaign_id
+    
+    def monitor_campaign_progress(self, campaign_id: str) -> Dict[str, Any]:
+        """Monitor research campaign progress."""
+        if campaign_id not in self._active_campaigns:
+            return {'error': f'Campaign {campaign_id} not found'}
+        
+        campaign_info = self._active_campaigns[campaign_id]
+        job_ids = campaign_info['job_ids']
+        
+        # Check job statuses
+        status_counts = {'PENDING': 0, 'RUNNING': 0, 'COMPLETED': 0, 'FAILED': 0}
+        
+        for job_id in job_ids:
+            status = self.slurm.get_job_status(job_id)
+            if status:
+                state = status.get('state', 'UNKNOWN')
+                status_counts[state] = status_counts.get(state, 0) + 1
+        
+        # Calculate progress
+        total_jobs = len(job_ids)
+        completed = status_counts.get('COMPLETED', 0)
+        progress_pct = (completed / total_jobs) * 100 if total_jobs > 0 else 0
+        
+        return {
+            'campaign_id': campaign_id,
+            'total_experiments': total_jobs,
+            'completed': completed,
+            'progress_percent': progress_pct,
+            'status_breakdown': status_counts,
+            'runtime_hours': (time.time() - campaign_info['start_time']) / 3600
+        }
+
+
+# Advanced HPC utility functions
+
+def create_distributed_training_script(model_config: Dict[str, Any],
+                                      output_path: str = "distributed_train.py") -> str:
+    """Generate distributed training script for HPC deployment.
+    
+    Args:
+        model_config: Model configuration
+        output_path: Output script path
+        
+    Returns:
+        Path to generated script
+    """
+    script_content = f'''
+#!/usr/bin/env python
+"""Distributed probabilistic neural operator training script for HPC."""
+
+import os
+import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+
+from probneural_operator.models.fno import ProbabilisticFNO
+from probneural_operator.scaling.distributed_training import (
+    DistributedConfig, DistributedUncertaintyTrainer
+)
+
+def main():
+    # Initialize distributed training
+    config = DistributedConfig()
+    
+    # Create model
+    model = ProbabilisticFNO(
+        input_dim={model_config.get('input_dim', 1)},
+        output_dim={model_config.get('output_dim', 1)},
+        modes={model_config.get('modes', 12)},
+        width={model_config.get('width', 64)},
+        depth={model_config.get('depth', 4)},
+        spatial_dim={model_config.get('spatial_dim', 2)}
+    )
+    
+    # Create distributed trainer
+    trainer = DistributedUncertaintyTrainer(model, config)
+    
+    # Load data and train (implementation specific)
+    print(f"Training started on rank {{config.rank}}/{{config.world_size}}")
+    
+    # Training implementation would go here
+    # trainer.train(train_loader, val_loader, epochs=100)
+
+if __name__ == "__main__":
+    main()
+'''
+    
+    with open(output_path, 'w') as f:
+        f.write(script_content)
+    
+    os.chmod(output_path, 0o755)
+    return output_path
+
+
+def estimate_hpc_costs(model_config: Dict[str, Any],
+                      dataset_size: int,
+                      training_hours: float,
+                      gpu_type: str = "a100") -> Dict[str, float]:
+    """Estimate HPC computational costs."""
+    
+    gpu_costs_per_hour = {
+        'v100': 3.00,
+        'a100': 4.50,
+        'rtx3090': 1.20,
+        'h100': 6.00
+    }
+    
+    optimizer = HPCResourceOptimizer()
+    config = optimizer.optimize_resource_allocation(model_config, dataset_size, training_hours)
+    
+    total_gpus = config.nodes * config.gpus_per_node
+    gpu_cost_per_hour = gpu_costs_per_hour.get(config.gpu_type or gpu_type, 3.00)
+    
+    total_gpu_hours = total_gpus * training_hours
+    compute_cost = total_gpu_hours * gpu_cost_per_hour
+    
+    # Add additional costs
+    storage_cost = dataset_size * 1e-6  # $1 per TB
+    network_cost = compute_cost * 0.03  # 3% of compute for network
+    
+    return {
+        'total_cost': compute_cost + storage_cost + network_cost,
+        'compute_cost': compute_cost,
+        'storage_cost': storage_cost,
+        'network_cost': network_cost,
+        'total_gpu_hours': total_gpu_hours,
+        'estimated_config': config.__dict__
+    }
