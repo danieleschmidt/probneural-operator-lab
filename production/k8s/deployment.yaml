@@ -1,0 +1,107 @@
+# Kubernetes deployment for ProbNeural Operator Lab
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: probneural-operator
+  labels:
+    app: probneural-operator
+    version: v1.0.0
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: probneural-operator
+  template:
+    metadata:
+      labels:
+        app: probneural-operator
+    spec:
+      containers:
+      - name: probneural-operator
+        image: probneural-operator:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2"
+            nvidia.com/gpu: 1
+          limits:
+            memory: "8Gi"
+            cpu: "4"
+            nvidia.com/gpu: 1
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/models
+        - name: data-storage
+          mountPath: /app/data
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import probneural_operator; print('OK')"
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import probneural_operator; print('Ready')"
+          initialDelaySeconds: 10
+          periodSeconds: 10
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: model-pvc
+      - name: data-storage
+        persistentVolumeClaim:
+          claimName: data-pvc
+      nodeSelector:
+        accelerator: nvidia-tesla-k80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: probneural-operator-service
+spec:
+  selector:
+    app: probneural-operator
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: LoadBalancer
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-pvc
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 500Gi
