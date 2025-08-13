@@ -1,7 +1,8 @@
 """Posterior approximation methods for uncertainty quantification."""
 
-from .laplace import LinearizedLaplace
+from .laplace import LinearizedLaplace, HierarchicalLaplaceApproximation
 from .base import PosteriorApproximation, get_posterior
+from .adaptive_uncertainty import AdaptiveUncertaintyScaler, UncertaintyScalingNetwork, MultiModalAdaptiveScaler
 
 # Placeholders for future implementations
 class VariationalPosterior:
@@ -18,6 +19,10 @@ __all__ = [
     "PosteriorApproximation",
     "get_posterior",
     "LinearizedLaplace", 
+    "HierarchicalLaplaceApproximation",
+    "AdaptiveUncertaintyScaler",
+    "UncertaintyScalingNetwork",
+    "MultiModalAdaptiveScaler",
     "VariationalPosterior", 
     "DeepEnsemble"
 ]
