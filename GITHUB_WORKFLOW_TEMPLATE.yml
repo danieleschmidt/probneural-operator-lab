@@ -1,0 +1,95 @@
+# GitHub Workflow Template for Terragon Quality Gates
+# 
+# To use this workflow:
+# 1. Copy this file to .github/workflows/terragon-quality-gates.yml
+# 2. Commit and push to enable automated quality gates in CI/CD
+#
+# Note: This file is provided as a template due to GitHub App permission restrictions.
+# Manual setup is required to enable workflow automation.
+
+name: Terragon Quality Gates
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM
+
+jobs:
+  quality-gates:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .[dev,test]
+        
+    - name: Run Quality Gates - Generation 1
+      run: python terragon/quality_gates/quality_gates.py gen1
+      
+    - name: Run Quality Gates - Generation 2
+      if: success()
+      run: python terragon/quality_gates/quality_gates.py gen2
+      
+    - name: Run Quality Gates - Generation 3
+      if: success()
+      run: python terragon/quality_gates/quality_gates.py gen3
+      
+    - name: Run Research Quality Gates
+      if: success()
+      run: python terragon/quality_gates/quality_gates.py research
+      
+    - name: Upload Quality Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: quality-reports
+        path: .terragon/reports/
+        
+    - name: Comment PR with Quality Results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          try {
+            const reportPath = '.terragon/quality_gate_report_generation_1.json';
+            if (fs.existsSync(reportPath)) {
+              const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+              const passRate = report.summary?.pass_rate || 0;
+              const status = passRate >= 80 ? '✅ PASSED' : '❌ FAILED';
+              
+              const comment = `## 🚀 Terragon Quality Gates Results ${status}
+              
+              **Overall Pass Rate**: ${passRate.toFixed(1)}%
+              **Total Executions**: ${report.summary?.total_executions || 0}
+              **Current Generation**: ${report.summary?.current_generation || 'Unknown'}
+              
+              ${passRate >= 80 
+                ? '🎉 All quality gates passed! Ready for merge.' 
+                : '⚠️ Quality gates failed. Please review and fix issues before merging.'
+              }
+              
+              📄 Detailed reports available in the workflow artifacts.`;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }
+          } catch (error) {
+            console.log('Could not post quality gate results:', error);
+          }

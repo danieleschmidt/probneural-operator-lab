@@ -1,0 +1,88 @@
+{
+  "context": {
+    "project_root": "/root/repo",
+    "test_coverage_threshold": 85.0,
+    "performance_threshold": 200.0,
+    "security_scan_enabled": true,
+    "parallel_execution": true,
+    "max_retries": 3,
+    "adaptive_thresholds": true,
+    "project_type": "research",
+    "primary_language": "python",
+    "framework": "pytorch"
+  },
+  "thresholds": {
+    "generation_1": {
+      "test_coverage": 70.0,
+      "code_quality": 75.0,
+      "security_basic": 90.0
+    },
+    "generation_2": {
+      "test_coverage": 85.0,
+      "code_quality": 85.0,
+      "security_comprehensive": 95.0,
+      "performance": 90.0
+    },
+    "generation_3": {
+      "test_coverage": 90.0,
+      "code_quality": 90.0,
+      "security_comprehensive": 98.0,
+      "performance": 95.0,
+      "scalability": 85.0
+    },
+    "research": {
+      "reproducibility": 85.0,
+      "statistical_validation": 80.0,
+      "baseline_comparison": 85.0,
+      "publication_readiness": 75.0,
+      "novelty_validation": 80.0
+    }
+  },
+  "execution_order": {
+    "generation_1": [
+      "Basic Syntax Check",
+      "Basic Import Check", 
+      "Basic Functionality"
+    ],
+    "generation_2": [
+      "Comprehensive Testing",
+      "Security Scan",
+      "Code Quality"
+    ],
+    "generation_3": [
+      "Performance Benchmark",
+      "Scalability Test",
+      "Production Readiness"
+    ],
+    "research": [
+      "Research Reproducibility",
+      "Statistical Validation",
+      "Baseline Comparison",
+      "Publication Readiness",
+      "Novelty Validation"
+    ]
+  },
+  "integration": {
+    "terragon_config_path": ".terragon/config.yaml",
+    "value_metrics_path": ".terragon/value-metrics.json",
+    "github_integration": true,
+    "slack_notifications": false,
+    "email_reports": true
+  },
+  "monitoring": {
+    "enabled": true,
+    "interval": 300,
+    "alert_thresholds": {
+      "quality_drop": 15.0,
+      "volatility": 20.0,
+      "low_score": 60.0
+    },
+    "retention_days": 30
+  },
+  "adaptive": {
+    "enabled": true,
+    "learning_rate": 0.1,
+    "confidence_threshold": 0.6,
+    "min_samples": 10
+  }
+}
