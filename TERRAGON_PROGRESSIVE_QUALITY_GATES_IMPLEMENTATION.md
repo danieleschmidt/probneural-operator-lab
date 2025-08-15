@@ -50,7 +50,7 @@ This document summarizes the successful implementation of the Terragon Progressi
 **Integration Layer**
 - ✅ Seamless Terragon SDLC integration
 - ✅ Value metrics tracking and business impact measurement
-- ✅ GitHub Actions workflow generation
+- ✅ GitHub Actions workflow template provided (see GITHUB_WORKFLOW_TEMPLATE.yml)
 - ✅ Comprehensive reporting and documentation
 
 ## 🏗️ Architecture Overview
