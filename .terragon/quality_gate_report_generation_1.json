@@ -1,0 +1,93 @@
+{
+  "summary": {
+    "total_executions": 3,
+    "passed_executions": 1,
+    "failed_executions": 2,
+    "pass_rate": 33.33333333333333,
+    "current_generation": "generation_1"
+  },
+  "recent_executions": [
+    {
+      "gate_name": "Basic Syntax Check",
+      "status": "passed",
+      "score": 97.0873786407767,
+      "max_score": 100.0,
+      "percentage_score": 97.0873786407767,
+      "execution_time": 6.408068656921387,
+      "details": {
+        "total_files": 103,
+        "valid_files": 100,
+        "syntax_errors": 3
+      },
+      "errors": [
+        "Syntax error in /root/repo/probneural_operator/scaling/distributed_training.py: File \"/root/repo/probneural_operator/scaling/distributed_training.py\", line 42\n    s,\\n        pin_memory=pin_memory,\\n        drop_last=True  # Important for distributed training\\n    )\n         ^\nSyntaxError: unexpected character after line continuation character",
+        "Syntax error in /root/repo/probneural_operator/scaling/hpc.py: Sorry: IndentationError: unexpected indent (hpc.py, line 1020)",
+        "Syntax error in /root/repo/tests/research/test_research_validation.py: File \"/root/repo/tests/research/test_research_validation.py\", line 21\n    testing\\n            'lr': 0.001,\\n            'device': 'cuda' if torch.cuda.is_available() else 'cpu'\\n        }\\n        \\n        # Run benchmark\\n        results = benchmark.benchmark_model(\\n            model_factory=model_factory,\\n            model_name=\\\"ProbabilisticFNO\\\",\\n            train_loader=train_loader,\\n            val_loader=val_loader,\\n            test_loader=test_loader,\\n            dataset_name=\\\"SyntheticBurgers\\\",\\n            training_config=training_config,\\n            metrics=['mse', 'mae']\\n        )\\n        \\n        assert len(results) >= 2\\n        assert all(isinstance(r, BenchmarkResult) for r in results)\\n        assert all(r.n_runs <= 2 for r in results)\\n        assert all(r.runtime > 0 for r in results)\\n        \\n        # Generate report\\n        report_path = benchmark.generate_report(include_plots=False)\\n        assert Path(report_path).exists()\n        ^\nSyntaxError: unexpected character after line continuation character"
+      ],
+      "warnings": [],
+      "recommendations": [],
+      "metrics": {
+        "syntax_error_rate": 2.912621359223301
+      }
+    },
+    {
+      "gate_name": "Basic Import Check",
+      "status": "failed",
+      "score": 0.0,
+      "max_score": 100.0,
+      "percentage_score": 0.0,
+      "execution_time": 0.28337717056274414,
+      "details": {
+        "tested_modules": 5,
+        "successful_imports": 0
+      },
+      "errors": [
+        "Main package import failed: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n  File \"/root/repo/probneural_operator/__init__.py\", line 24, in <module>\n    from probneural_operator.models import (\n  File \"/root/repo/probneural_operator/models/__init__.py\", line 3, in <module>\n    from .fno import FourierNeuralOperator, ProbabilisticFNO\n  File \"/root/repo/probneural_operator/models/fno/__init__.py\", line 3, in <module>\n    from .fno import FourierNeuralOperator, ProbabilisticFNO\n  File \"/root/repo/probneural_operator/models/fno/fno.py\", line 84, in <module>\n    import torch\nModuleNotFoundError: No module named 'torch'\n"
+      ],
+      "warnings": [
+        "Module probneural_operator.models import warning: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n  File \"/root/repo/probneural_operator/__init__.py\", line 24, in <module>\n    from probneural_operator.models import (\n  File \"/root/repo/probneural_operator/models/__init__.py\", line 3, in <module>\n    from .fno import FourierNeuralOperator, ProbabilisticFNO\n  File \"/root/repo/probneural_operator/models/fno/__init__.py\", line 3, in <module>\n    from .fno import FourierNeuralOperator, ProbabilisticFNO\n  File \"/root/repo/probneural_operator/models/fno/fno.py\", line 84, in <module>\n    import torch\nModuleNotFoundError: No module named 'torch'\n",
+        "Module probneural_operator.posteriors import warning: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n  File \"/root/repo/probneural_operator/__init__.py\", line 24, in <module>\n    from probneural_operator.models import (\n  File \"/root/repo/probneural_operator/models/__init__.py\", line 3, in <module>\n    from .fno import FourierNeuralOperator, ProbabilisticFNO\n  File \"/root/repo/probneural_operator/models/fno/__init__.py\", line 3, in <module>\n    from .fno import FourierNeuralOperator, ProbabilisticFNO\n  File \"/root/repo/probneural_operator/models/fno/fno.py\", line 84, in <module>\n    import torch\nModuleNotFoundError: No module named 'torch'\n",
+        "Module probneural_operator.active import warning: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n  File \"/root/repo/probneural_operator/__init__.py\", line 24, in <module>\n    from probneural_operator.models import (\n  File \"/root/repo/probneural_operator/models/__init__.py\", line 3, in <module>\n    from .fno import FourierNeuralOperator, ProbabilisticFNO\n  File \"/root/repo/probneural_operator/models/fno/__init__.py\", line 3, in <module>\n    from .fno import FourierNeuralOperator, ProbabilisticFNO\n  File \"/root/repo/probneural_operator/models/fno/fno.py\", line 84, in <module>\n    import torch\nModuleNotFoundError: No module named 'torch'\n",
+        "Module probneural_operator.utils import warning: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n  File \"/root/repo/probneural_operator/__init__.py\", line 24, in <module>\n    from probneural_operator.models import (\n  File \"/root/repo/probneural_operator/models/__init__.py\", line 3, in <module>\n    from .fno import FourierNeuralOperator, ProbabilisticFNO\n  File \"/root/repo/probneural_operator/models/fno/__init__.py\", line 3, in <module>\n    from .fno import FourierNeuralOperator, ProbabilisticFNO\n  File \"/root/repo/probneural_operator/models/fno/fno.py\", line 84, in <module>\n    import torch\nModuleNotFoundError: No module named 'torch'\n"
+      ],
+      "recommendations": [],
+      "metrics": {
+        "import_success_rate": 0.0
+      }
+    },
+    {
+      "gate_name": "Basic Functionality",
+      "status": "failed",
+      "score": 0.0,
+      "max_score": 100.0,
+      "percentage_score": 0.0,
+      "execution_time": 0.17852234840393066,
+      "details": {
+        "total_tests": 3,
+        "passed_tests": 0
+      },
+      "errors": [],
+      "warnings": [
+        "Config loading test failed: Traceback (most recent call last):\n  File \"<string>\", line 4, in <module>\n  File \"/root/repo/probneural_operator/__init__.py\", line 24, in <module>\n    from probneural_operator.models import (\n  File \"/root/repo/probneural_operator/models/__init__.py\", line 3, in <module>\n    from .fno import FourierNeuralOperator, ProbabilisticFNO\n  File \"/root/repo/probneural_operator/models/fno/__init__.py\", line 3, in <module>\n    from .fno import FourierNeuralOperator, ProbabilisticFNO\n  File \"/root/repo/probneural_operator/models/fno/fno.py\", line 84, in <module>\n    import torch\nModuleNotFoundError: No module named 'torch'\n",
+        "Model instantiation test failed: Traceback (most recent call last):\n  File \"<string>\", line 4, in <module>\n  File \"/root/repo/probneural_operator/__init__.py\", line 24, in <module>\n    from probneural_operator.models import (\n  File \"/root/repo/probneural_operator/models/__init__.py\", line 3, in <module>\n    from .fno import FourierNeuralOperator, ProbabilisticFNO\n  File \"/root/repo/probneural_operator/models/fno/__init__.py\", line 3, in <module>\n    from .fno import FourierNeuralOperator, ProbabilisticFNO\n  File \"/root/repo/probneural_operator/models/fno/fno.py\", line 84, in <module>\n    import torch\nModuleNotFoundError: No module named 'torch'\n",
+        "Utility test failed: Traceback (most recent call last):\n  File \"<string>\", line 4, in <module>\n  File \"/root/repo/probneural_operator/__init__.py\", line 24, in <module>\n    from probneural_operator.models import (\n  File \"/root/repo/probneural_operator/models/__init__.py\", line 3, in <module>\n    from .fno import FourierNeuralOperator, ProbabilisticFNO\n  File \"/root/repo/probneural_operator/models/fno/__init__.py\", line 3, in <module>\n    from .fno import FourierNeuralOperator, ProbabilisticFNO\n  File \"/root/repo/probneural_operator/models/fno/fno.py\", line 84, in <module>\n    import torch\nModuleNotFoundError: No module named 'torch'\n"
+      ],
+      "recommendations": [],
+      "metrics": {
+        "functionality_score": 0.0
+      }
+    }
+  ],
+  "performance_metrics": {
+    "avg_execution_time": 2.289989391962687,
+    "max_execution_time": 6.408068656921387,
+    "min_execution_time": 0.17852234840393066,
+    "avg_score": 32.36245954692557,
+    "max_score": 97.0873786407767,
+    "min_score": 0.0
+  },
+  "recommendations": [
+    "High failure rate detected - consider reviewing gate thresholds",
+    "Most common failure type: unknown - focus improvement efforts here"
+  ]
+}
