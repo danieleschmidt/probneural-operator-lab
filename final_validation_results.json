@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-08-13 21:02:07",
+  "timestamp": "2025-08-16 18:32:32",
   "validations": {
     "Framework Structure": true,
     "Deployment Infrastructure": true,
@@ -10,21 +10,21 @@
   },
   "metrics": {
     "files": {
-      "python": 93,
-      "documentation": 41,
-      "configuration": 23,
-      "data": 4,
-      "total": 161
+      "python": 106,
+      "documentation": 42,
+      "configuration": 24,
+      "data": 6,
+      "total": 178
     },
     "code": {
-      "total_lines": 37149,
-      "code_lines": 27335,
-      "avg_lines_per_file": 399
+      "total_lines": 42797,
+      "code_lines": 31643,
+      "avg_lines_per_file": 403
     },
     "structure": {
       "max_directory_depth": 6,
-      "total_directories": 69,
-      "total_files": 296
+      "total_directories": 91,
+      "total_files": 406
     }
   },
   "overall_score": "6/6",
