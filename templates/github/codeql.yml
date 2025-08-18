@@ -1,0 +1,145 @@
+# CodeQL configuration for ProbNeural Operator Lab
+# Advanced static analysis for Python code
+
+name: "ProbNeural Operator Lab CodeQL Config"
+
+disable-default-queries: false
+
+queries:
+  - name: "Security queries"
+    uses: security-and-quality
+  - name: "Security extended queries"  
+    uses: security-extended
+  - name: "Custom ML security queries"
+    uses: ./.github/codeql-queries/
+
+paths:
+  # Include source code
+  - probneural_operator/
+  - tests/
+  - examples/
+  - scripts/
+
+paths-ignore:
+  # Exclude generated files
+  - "**/__pycache__/**"
+  - "**/*.pyc"
+  - "**/build/**"
+  - "**/dist/**"
+  - "**/.pytest_cache/**"
+  - "**/.mypy_cache/**"
+  - "**/htmlcov/**"
+  # Exclude documentation
+  - "docs/_build/**"
+  # Exclude temporary files
+  - "**/tmp/**"
+  - "**/temp/**"
+
+query-filters:
+  - exclude:
+      id: py/empty-except
+  - exclude:
+      id: py/catch-base-exception
+      # Allow catching base exceptions in specific contexts
+      where: |
+        exists(TryStmt try |
+          try.getLocation().getFile().getBaseName() = "exceptions.py" or
+          try.getLocation().getFile().getBaseName().matches("%test%")
+        )
+
+ml-security:
+  # Enable ML-specific security checks
+  model-security:
+    - check-pickle-loading
+    - validate-model-inputs
+    - secure-model-serialization
+    - prevent-model-poisoning
+  
+  data-security:
+    - check-data-validation
+    - prevent-data-leakage
+    - validate-input-sanitization
+    - check-pii-handling
+
+custom-queries:
+  # Custom queries for probabilistic neural operators
+  - name: "Unsafe tensor operations"
+    description: "Detect potentially unsafe tensor operations"
+    query: |
+      import python
+      
+      class UnsafeTensorOp extends Call {
+        UnsafeTensorOp() {
+          this.getFunc().(Name).getId() in ["eval", "pickle.load", "torch.load"] and
+          not exists(Keyword kw | kw = this.getAKeyword() and kw.getArg() = "map_location")
+        }
+      }
+      
+      from UnsafeTensorOp call
+      select call, "Potentially unsafe tensor operation"
+      
+  - name: "Unvalidated model inputs"
+    description: "Detect model forward passes without input validation"
+    query: |
+      import python
+      
+      class ModelForwardCall extends Call {
+        ModelForwardCall() {
+          exists(Attribute attr |
+            attr = this.getFunc() and
+            attr.getAttr() = "forward"
+          )
+        }
+      }
+      
+      from ModelForwardCall call
+      where not exists(Call validation |
+        validation.getFunc().(Name).getId() in ["validate", "check", "assert"] and
+        validation.getLocation().getStartLine() < call.getLocation().getStartLine()
+      )
+      select call, "Model forward call without input validation"
+
+  - name: "Hardcoded random seeds"
+    description: "Detect hardcoded random seeds that could affect reproducibility"
+    query: |
+      import python
+      
+      class RandomSeedCall extends Call {
+        RandomSeedCall() {
+          this.getFunc().(Attribute).getAttr() in ["seed", "manual_seed"] and
+          exists(IntegerLiteral lit | lit = this.getAnArg())
+        }
+      }
+      
+      from RandomSeedCall call
+      select call, "Hardcoded random seed - consider using configuration"
+
+  - name: "Insecure uncertainty estimation"
+    description: "Detect potentially insecure uncertainty estimation patterns"
+    query: |
+      import python
+      
+      class UncertaintyEstimation extends Call {
+        UncertaintyEstimation() {
+          exists(Name func | func = this.getFunc() and
+            func.getId().toLowerCase().matches("%uncertain%") and
+            not exists(this.getAKeyword())
+          )
+        }
+      }
+      
+      from UncertaintyEstimation call
+      select call, "Uncertainty estimation without configuration parameters"
+
+# Additional configuration for ML workflows
+packs:
+  # Include additional query packs
+  - "codeql/python-queries"
+  - "codeql/security-queries"
+
+# Performance tuning for large codebases
+performance:
+  # Optimize for Python ML projects
+  max-memory-mb: 4096
+  max-disk-mb: 2048
+  threads: 4

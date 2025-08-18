@@ -1,0 +1,439 @@
+{
+  "project_name": "probneural-operator-lab",
+  "version": "1.0",
+  "last_updated": "2025-01-01T00:00:00Z",
+  "metrics": {
+    "repository": {
+      "health_score": {
+        "value": 0,
+        "max_value": 100,
+        "description": "Overall repository health score based on various factors",
+        "components": {
+          "documentation_coverage": {
+            "weight": 20,
+            "value": 0,
+            "criteria": [
+              "README.md exists and is comprehensive",
+              "API documentation exists",
+              "Contributing guidelines exist",
+              "Code of conduct exists",
+              "Security policy exists"
+            ]
+          },
+          "test_coverage": {
+            "weight": 25,
+            "value": 0,
+            "target": 90,
+            "criteria": [
+              "Unit test coverage > 80%",
+              "Integration tests exist",
+              "Performance tests exist",
+              "Property-based tests exist"
+            ]
+          },
+          "code_quality": {
+            "weight": 20,
+            "value": 0,
+            "criteria": [
+              "Consistent code formatting",
+              "Type hints coverage > 80%",
+              "No high-severity linting issues",
+              "Security scan passes"
+            ]
+          },
+          "ci_cd_setup": {
+            "weight": 15,
+            "value": 0,
+            "criteria": [
+              "CI pipeline exists",
+              "Automated testing",
+              "Security scanning",
+              "Automated releases"
+            ]
+          },
+          "community_engagement": {
+            "weight": 10,
+            "value": 0,
+            "criteria": [
+              "Issue templates exist",
+              "PR templates exist",
+              "Active maintenance",
+              "Responsive to issues"
+            ]
+          },
+          "security_posture": {
+            "weight": 10,
+            "value": 0,
+            "criteria": [
+              "Dependency scanning enabled",
+              "Secret scanning enabled",
+              "SBOM generation",
+              "Vulnerability disclosure policy"
+            ]
+          }
+        }
+      },
+      "activity_metrics": {
+        "commits_per_month": {
+          "value": 0,
+          "trend": "stable",
+          "target": 20
+        },
+        "issues_resolved_per_month": {
+          "value": 0,
+          "trend": "stable",
+          "target": 5
+        },
+        "pr_merge_rate": {
+          "value": 0,
+          "trend": "stable",
+          "target": 85,
+          "unit": "percentage"
+        },
+        "average_pr_review_time": {
+          "value": 0,
+          "trend": "stable",
+          "target": 24,
+          "unit": "hours"
+        }
+      }
+    },
+    "code_quality": {
+      "test_coverage": {
+        "overall": {
+          "value": 0,
+          "target": 90,
+          "unit": "percentage"
+        },
+        "unit_tests": {
+          "value": 0,
+          "target": 95,
+          "unit": "percentage"
+        },
+        "integration_tests": {
+          "value": 0,
+          "target": 80,
+          "unit": "percentage"
+        },
+        "line_coverage": {
+          "value": 0,
+          "target": 90,
+          "unit": "percentage"
+        },
+        "branch_coverage": {
+          "value": 0,
+          "target": 85,
+          "unit": "percentage"
+        }
+      },
+      "code_complexity": {
+        "cyclomatic_complexity": {
+          "average": 0,
+          "max": 0,
+          "target": 10
+        },
+        "maintainability_index": {
+          "value": 0,
+          "target": 80,
+          "unit": "score"
+        }
+      },
+      "type_coverage": {
+        "value": 0,
+        "target": 80,
+        "unit": "percentage"
+      },
+      "linting_issues": {
+        "critical": {
+          "count": 0,
+          "target": 0
+        },
+        "high": {
+          "count": 0,
+          "target": 0
+        },
+        "medium": {
+          "count": 0,
+          "target": 5
+        },
+        "low": {
+          "count": 0,
+          "target": 20
+        }
+      }
+    },
+    "security": {
+      "vulnerability_count": {
+        "critical": {
+          "count": 0,
+          "target": 0
+        },
+        "high": {
+          "count": 0,
+          "target": 0
+        },
+        "medium": {
+          "count": 0,
+          "target": 2
+        },
+        "low": {
+          "count": 0,
+          "target": 5
+        }
+      },
+      "dependency_health": {
+        "outdated_dependencies": {
+          "count": 0,
+          "target": 5
+        },
+        "security_updates_pending": {
+          "count": 0,
+          "target": 0
+        },
+        "license_compliance": {
+          "compliant_percentage": 0,
+          "target": 100
+        }
+      },
+      "security_scan_frequency": {
+        "last_scan": null,
+        "frequency": "daily",
+        "compliance_score": 0,
+        "target": 95
+      }
+    },
+    "performance": {
+      "build_times": {
+        "ci_build_time": {
+          "average": 0,
+          "target": 600,
+          "unit": "seconds"
+        },
+        "docker_build_time": {
+          "average": 0,
+          "target": 300,
+          "unit": "seconds"
+        },
+        "test_execution_time": {
+          "average": 0,
+          "target": 300,
+          "unit": "seconds"
+        }
+      },
+      "package_metrics": {
+        "package_size": {
+          "wheel_size_mb": 0,
+          "source_size_mb": 0,
+          "target_wheel_size": 50
+        },
+        "import_time": {
+          "cold_import_ms": 0,
+          "target": 1000
+        }
+      },
+      "runtime_performance": {
+        "memory_usage_mb": {
+          "baseline": 0,
+          "peak": 0,
+          "target": 1000
+        },
+        "inference_latency_ms": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "target_p95": 100
+        }
+      }
+    },
+    "ml_specific": {
+      "model_metrics": {
+        "uncertainty_calibration": {
+          "expected_calibration_error": {
+            "value": 0,
+            "target": 0.05,
+            "unit": "ratio"
+          },
+          "reliability_diagram_score": {
+            "value": 0,
+            "target": 0.95,
+            "unit": "score"
+          }
+        },
+        "active_learning_efficiency": {
+          "data_efficiency": {
+            "value": 0,
+            "target": 0.8,
+            "unit": "ratio"
+          },
+          "acquisition_diversity": {
+            "value": 0,
+            "target": 0.7,
+            "unit": "score"
+          }
+        },
+        "model_robustness": {
+          "adversarial_robustness": {
+            "value": 0,
+            "target": 0.85,
+            "unit": "accuracy"
+          },
+          "out_of_distribution_detection": {
+            "auroc": 0,
+            "target": 0.9
+          }
+        }
+      },
+      "research_impact": {
+        "benchmark_performance": {
+          "burgers_equation_mse": {
+            "value": 0,
+            "target": 0.01,
+            "unit": "mse"
+          },
+          "darcy_flow_r2": {
+            "value": 0,
+            "target": 0.95,
+            "unit": "r2_score"
+          }
+        },
+        "reproducibility_score": {
+          "value": 0,
+          "target": 95,
+          "unit": "percentage"
+        }
+      }
+    },
+    "community": {
+      "adoption_metrics": {
+        "github_stars": {
+          "current": 0,
+          "monthly_growth": 0,
+          "target_growth": 10
+        },
+        "github_forks": {
+          "current": 0,
+          "monthly_growth": 0
+        },
+        "pypi_downloads": {
+          "monthly": 0,
+          "total": 0,
+          "target_monthly": 1000
+        },
+        "docker_pulls": {
+          "monthly": 0,
+          "total": 0,
+          "target_monthly": 100
+        }
+      },
+      "engagement_metrics": {
+        "issues": {
+          "open": 0,
+          "closed": 0,
+          "resolution_time_days": 0,
+          "target_resolution_time": 7
+        },
+        "pull_requests": {
+          "open": 0,
+          "merged": 0,
+          "review_time_hours": 0,
+          "target_review_time": 24
+        },
+        "discussions": {
+          "active": 0,
+          "resolved": 0
+        }
+      },
+      "contributor_metrics": {
+        "total_contributors": 0,
+        "active_contributors_monthly": 0,
+        "new_contributors_monthly": 0,
+        "contributor_diversity_score": 0
+      }
+    },
+    "operational": {
+      "deployment_metrics": {
+        "deployment_frequency": {
+          "releases_per_month": 0,
+          "target": 2
+        },
+        "deployment_success_rate": {
+          "value": 0,
+          "target": 98,
+          "unit": "percentage"
+        },
+        "rollback_rate": {
+          "value": 0,
+          "target": 2,
+          "unit": "percentage"
+        },
+        "mean_time_to_recovery": {
+          "minutes": 0,
+          "target": 30
+        }
+      },
+      "monitoring_metrics": {
+        "uptime": {
+          "value": 0,
+          "target": 99.9,
+          "unit": "percentage"
+        },
+        "error_rate": {
+          "value": 0,
+          "target": 0.1,
+          "unit": "percentage"
+        },
+        "response_time_p95": {
+          "ms": 0,
+          "target": 200
+        }
+      }
+    }
+  },
+  "collection_config": {
+    "update_frequency": "daily",
+    "data_sources": [
+      "github_api",
+      "pypi_api",
+      "docker_hub_api",
+      "ci_cd_systems",
+      "code_quality_tools",
+      "security_scanners",
+      "monitoring_systems"
+    ],
+    "automated_collection": true,
+    "retention_days": 365
+  },
+  "reporting": {
+    "dashboard_url": "https://metrics.probneural-lab.com",
+    "reports": [
+      {
+        "name": "weekly_summary",
+        "frequency": "weekly",
+        "recipients": ["team@probneural-lab.com"]
+      },
+      {
+        "name": "monthly_detailed",
+        "frequency": "monthly",
+        "recipients": ["leadership@probneural-lab.com"]
+      },
+      {
+        "name": "quarterly_review",
+        "frequency": "quarterly",
+        "recipients": ["stakeholders@probneural-lab.com"]
+      }
+    ]
+  },
+  "alerts": {
+    "thresholds": {
+      "test_coverage_below": 80,
+      "build_failure_rate_above": 10,
+      "security_vulnerabilities_critical": 0,
+      "deployment_failure_rate_above": 5
+    },
+    "notification_channels": [
+      "slack",
+      "email",
+      "github_issues"
+    ]
+  }
+}

@@ -1,0 +1,166 @@
+# OpenTelemetry Configuration for ProbNeural Operator Lab
+# Enables distributed tracing, metrics, and structured logging
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - http://*
+            - https://*
+  
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'probneural-operator'
+          static_configs:
+            - targets: ['localhost:8000']
+          scrape_interval: 15s
+          metrics_path: '/metrics'
+  
+  filelog:
+    include:
+      - /var/log/probneural/*.log
+      - /var/log/probneural/*.json
+    operators:
+      - type: json_parser
+        id: json_parsing
+        if: 'body matches "^\\{"'
+      - type: timestamp
+        id: timestamp_parsing
+        parse_from: attributes.timestamp
+        layout_type: strptime
+        layout: '%Y-%m-%d %H:%M:%S'
+
+processors:
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+  
+  memory_limiter:
+    limit_mib: 512
+    spike_limit_mib: 128
+    check_interval: 5s
+  
+  resource:
+    attributes:
+      - key: service.name
+        value: probneural-operator-lab
+        action: upsert
+      - key: service.version
+        from_attribute: version
+        action: upsert
+      - key: deployment.environment
+        from_attribute: environment
+        action: upsert
+  
+  attributes:
+    actions:
+      - key: sensitive_data
+        action: delete
+      - key: api_key
+        action: delete
+      - key: password
+        action: delete
+  
+  probabilistic_sampler:
+    sampling_percentage: 10  # Sample 10% of traces in production
+  
+  # Custom processor for ML-specific attributes
+  transform:
+    trace_statements:
+      - context: span
+        statements:
+          - set(attributes["ml.model.type"], attributes["model_type"]) where attributes["model_type"] != nil
+          - set(attributes["ml.model.version"], attributes["model_version"]) where attributes["model_version"] != nil
+          - set(attributes["ml.uncertainty.method"], attributes["uncertainty_method"]) where attributes["uncertainty_method"] != nil
+
+exporters:
+  # Jaeger for distributed tracing
+  jaeger:
+    endpoint: jaeger:14250
+    tls:
+      insecure: true
+  
+  # Prometheus for metrics
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: probneural
+    const_labels:
+      service: probneural-operator-lab
+  
+  # Loki for logs
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    format: json
+    labels:
+      attributes:
+        service.name: "service_name"
+        log.level: "level"
+        log.logger: "logger"
+  
+  # OTLP export for external systems
+  otlp/external:
+    endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+    headers:
+      api-key: ${OTEL_API_KEY}
+    compression: gzip
+  
+  # File export for debugging
+  file:
+    path: /tmp/otel-traces.json
+
+# Service pipelines
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: 
+        - memory_limiter
+        - resource
+        - attributes  
+        - probabilistic_sampler
+        - transform
+        - batch
+      exporters: [jaeger, otlp/external, file]
+    
+    metrics:
+      receivers: [otlp, prometheus]
+      processors:
+        - memory_limiter
+        - resource
+        - attributes
+        - batch
+      exporters: [prometheus, otlp/external]
+    
+    logs:
+      receivers: [otlp, filelog]
+      processors:
+        - memory_limiter
+        - resource
+        - attributes
+        - batch
+      exporters: [loki, otlp/external]
+  
+  extensions: [health_check, pprof]
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  
+  pprof:
+    endpoint: 0.0.0.0:1777
+  
+  zpages:
+    endpoint: 0.0.0.0:55679

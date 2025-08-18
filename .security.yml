@@ -1,0 +1,251 @@
+# Security configuration for ProbNeural Operator Lab
+# This file defines security policies and scanning configurations
+
+version: 1.0
+
+# Dependency scanning configuration
+dependencies:
+  # Known vulnerabilities to ignore (with justification)
+  ignore:
+    # Example: CVE-2021-12345 - Not applicable to our use case
+    # - "CVE-2021-12345"
+  
+  # Minimum severity level to report
+  min_severity: "medium"
+  
+  # Allowed licenses for dependencies
+  allowed_licenses:
+    - "MIT"
+    - "Apache-2.0"
+    - "BSD-2-Clause"
+    - "BSD-3-Clause"
+    - "ISC"
+    - "Python Software Foundation License"
+  
+  # Blocked packages (supply chain security)
+  blocked_packages:
+    - "malicious-package"
+    - "known-bad-package"
+
+# Static code analysis configuration
+static_analysis:
+  # Bandit configuration for security linting
+  bandit:
+    skips:
+      # Skip specific test IDs if needed
+      # - "B101"  # assert_used
+    confidence: "medium"
+    severity: "medium"
+  
+  # CodeQL configuration
+  codeql:
+    languages:
+      - "python"
+    queries:
+      - "security-and-quality"
+
+# Container security configuration  
+container:
+  # Base image security requirements
+  base_images:
+    allowed:
+      - "python:3.11-slim-bullseye"
+      - "python:3.10-slim-bullseye"
+      - "python:3.9-slim-bullseye"
+    
+    # Scan base images for vulnerabilities
+    scan_base: true
+    
+    # Maximum age for base images (days)
+    max_age: 30
+  
+  # Container runtime security
+  runtime:
+    # Run as non-root user
+    non_root: true
+    
+    # Read-only root filesystem
+    read_only_root: false  # Set to false for development
+    
+    # Drop capabilities
+    drop_capabilities:
+      - "NET_RAW"
+      - "SYS_ADMIN"
+      - "SYS_PTRACE"
+    
+    # Security options
+    security_opts:
+      - "no-new-privileges:true"
+
+# Secrets management
+secrets:
+  # Patterns to detect secrets in code
+  detection_patterns:
+    - "(?i)(password|passwd|pwd)\\s*=\\s*['\"][^'\"]{8,}['\"]"
+    - "(?i)(api_key|apikey)\\s*=\\s*['\"][^'\"]{20,}['\"]"
+    - "(?i)(secret|token)\\s*=\\s*['\"][^'\"]{16,}['\"]"
+    - "(?i)(access_key|accesskey)\\s*=\\s*['\"][^'\"]{16,}['\"]"
+  
+  # Files to exclude from secret scanning
+  exclude_files:
+    - "*.md"
+    - "*.rst"
+    - "*.txt"
+    - "tests/fixtures/*"
+    - "*.example"
+  
+  # Environment variables that should be encrypted
+  secure_env_vars:
+    - "DATABASE_PASSWORD"
+    - "API_KEY"
+    - "SECRET_KEY"
+    - "PRIVATE_KEY"
+
+# Network security
+network:
+  # Allowed outbound connections
+  egress:
+    allowed_domains:
+      - "pypi.org"
+      - "files.pythonhosted.org"
+      - "github.com"
+      - "api.github.com"
+      - "docker.io"
+      - "registry-1.docker.io"
+    
+    # Blocked domains
+    blocked_domains:
+      - "malicious-site.com"
+  
+  # TLS requirements
+  tls:
+    min_version: "1.2"
+    require_encryption: true
+
+# Data protection
+data:
+  # PII detection patterns
+  pii_patterns:
+    - "\\b\\d{3}-\\d{2}-\\d{4}\\b"  # SSN
+    - "\\b4[0-9]{12}(?:[0-9]{3})?\\b"  # Credit card
+    - "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b"  # Email
+  
+  # Data classification
+  classifications:
+    - "public"
+    - "internal"
+    - "confidential"
+    - "restricted"
+
+# Compliance requirements
+compliance:
+  # Frameworks to comply with
+  frameworks:
+    - "OWASP"
+    - "CWE"
+    - "NIST"
+  
+  # Required security controls
+  controls:
+    - "authentication"
+    - "authorization"
+    - "encryption"
+    - "logging"
+    - "monitoring"
+
+# Incident response
+incident_response:
+  # Contact information
+  contacts:
+    - name: "Security Team"
+      email: "security@example.com"
+      role: "primary"
+  
+  # Severity levels
+  severity_levels:
+    critical:
+      description: "Critical vulnerability requiring immediate action"
+      response_time: "2 hours"
+    
+    high:
+      description: "High-risk vulnerability"
+      response_time: "24 hours"
+    
+    medium:
+      description: "Medium-risk vulnerability"
+      response_time: "7 days"
+    
+    low:
+      description: "Low-risk informational issue"
+      response_time: "30 days"
+
+# Security testing
+testing:
+  # SAST tools to use
+  sast_tools:
+    - "bandit"
+    - "semgrep"
+    - "codeql"
+  
+  # DAST tools for web applications
+  dast_tools:
+    - "zap"
+    - "burp"
+  
+  # Container scanning tools
+  container_tools:
+    - "trivy"
+    - "clair"
+    - "grype"
+  
+  # Dependency scanning tools
+  dependency_tools:
+    - "safety"
+    - "pip-audit"
+    - "snyk"
+
+# Reporting
+reporting:
+  # Output formats
+  formats:
+    - "json"
+    - "sarif"
+    - "junit"
+  
+  # Report destinations
+  destinations:
+    - "stdout"
+    - "file"
+    - "github-security-tab"
+  
+  # Metrics to track
+  metrics:
+    - "vulnerabilities_by_severity"
+    - "mean_time_to_fix"
+    - "security_coverage"
+    - "compliance_score"
+
+# Automation
+automation:
+  # Automated fixes
+  auto_fix:
+    enabled: true
+    
+    # What to automatically fix
+    fix_types:
+      - "dependency_updates"
+      - "formatting_issues"
+      - "minor_security_issues"
+  
+  # CI/CD integration
+  cicd:
+    # Fail build on security issues
+    fail_on:
+      - "critical"
+      - "high"
+    
+    # Generate security reports
+    generate_reports: true
+    
+    # Upload results to security dashboard
+    upload_results: true
