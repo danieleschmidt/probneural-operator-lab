@@ -1,0 +1,41 @@
+# Global owners
+* @danieleschmidt
+
+# Core package architecture
+/probneural_operator/ @danieleschmidt
+/probneural_operator/models/ @danieleschmidt
+/probneural_operator/posteriors/ @danieleschmidt
+
+# Testing and quality assurance
+/tests/ @danieleschmidt
+/benchmarks/ @danieleschmidt
+*.py @danieleschmidt
+
+# Documentation
+/docs/ @danieleschmidt
+*.md @danieleschmidt
+/examples/ @danieleschmidt
+
+# Build and deployment
+/Dockerfile @danieleschmidt
+/docker-compose*.yml @danieleschmidt
+/pyproject.toml @danieleschmidt
+/Makefile @danieleschmidt
+
+# CI/CD and workflows
+/.github/ @danieleschmidt
+/templates/github/ @danieleschmidt
+
+# Configuration files
+/.pre-commit-config.yaml @danieleschmidt
+/.editorconfig @danieleschmidt
+/.gitignore @danieleschmidt
+
+# Production deployment
+/production/ @danieleschmidt
+/k8s-deployment.yaml @danieleschmidt
+/monitoring/ @danieleschmidt
+
+# Research and applications
+/terragon/ @danieleschmidt
+/configs/ @danieleschmidt
