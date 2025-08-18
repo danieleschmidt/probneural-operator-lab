@@ -1,0 +1,138 @@
+# Dependabot configuration for ProbNeural Operator Lab
+# Automates dependency updates with security focus
+
+version: 2
+
+updates:
+  # Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    assignees:
+      - "danieleschmidt"
+    reviewers:
+      - "danieleschmidt"
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+      include: "scope"
+    # Group related updates
+    groups:
+      pytorch:
+        patterns:
+          - "torch*"
+          - "torchvision"
+          - "torchaudio"
+      testing:
+        patterns:
+          - "pytest*"
+          - "hypothesis"
+          - "coverage"
+          - "codecov"
+      linting:
+        patterns:
+          - "black"
+          - "isort"
+          - "ruff"
+          - "mypy"
+          - "pre-commit"
+      documentation:
+        patterns:
+          - "sphinx*"
+          - "nbsphinx"
+          - "jupyter*"
+      scientific:
+        patterns:
+          - "numpy"
+          - "scipy"
+          - "matplotlib"
+          - "scikit-learn"
+    # Security-only updates for production dependencies
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    # Allow specific version updates
+    allow:
+      - dependency-type: "direct"
+        update-type: "security"
+      - dependency-type: "indirect"
+        update-type: "security"
+      - dependency-type: "direct"
+        update-type: "version-update:semver-minor"
+      - dependency-type: "direct" 
+        update-type: "version-update:semver-patch"
+
+  # Docker base image updates
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "10:00"
+      timezone: "UTC"
+    assignees:
+      - "danieleschmidt"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "docker"
+
+  # GitHub Actions updates
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday" 
+      time: "11:00"
+      timezone: "UTC"
+    assignees:
+      - "danieleschmidt"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+    # Group action updates by category
+    groups:
+      setup-actions:
+        patterns:
+          - "actions/setup-*"
+          - "actions/cache"
+          - "actions/checkout"
+      upload-actions:
+        patterns:
+          - "actions/upload-*"
+          - "actions/download-*"
+      security-actions:
+        patterns:
+          - "github/codeql-action/*"
+          - "aquasecurity/trivy-action"
+          - "trufflesecurity/trufflehog"
+
+  # Terraform updates (if using infrastructure as code)
+  - package-ecosystem: "terraform"
+    directory: "/infrastructure"
+    schedule:
+      interval: "monthly"
+      day: "first-monday"
+      time: "12:00"
+      timezone: "UTC"
+    assignees:
+      - "danieleschmidt"
+    labels:
+      - "dependencies"
+      - "infrastructure"
+    commit-message:
+      prefix: "infra"
+
+# Configuration for security updates
+# Dependabot will automatically create PRs for security vulnerabilities
