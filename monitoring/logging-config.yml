@@ -1,0 +1,193 @@
+# Logging configuration for ProbNeural Operator Lab
+# Supports structured logging with multiple outputs
+
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  standard:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+  
+  json:
+    class: pythonjsonlogger.jsonlogger.JsonFormatter
+    format: '%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d %(funcName)s'
+    datefmt: '%Y-%m-%dT%H:%M:%SZ'
+  
+  detailed:
+    format: |
+      %(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(funcName)s()
+      %(message)s
+    datefmt: '%Y-%m-%d %H:%M:%S'
+  
+  performance:
+    class: pythonjsonlogger.jsonlogger.JsonFormatter
+    format: '%(asctime)s %(name)s %(levelname)s %(message)s %(duration_ms)s %(memory_mb)s'
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: standard
+    stream: ext://sys.stdout
+  
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: detailed
+    filename: logs/probneural.log
+    maxBytes: 50MB
+    backupCount: 10
+    encoding: utf-8
+  
+  json_file:
+    class: logging.handlers.RotatingFileHandler
+    level: INFO
+    formatter: json
+    filename: logs/probneural.json
+    maxBytes: 50MB
+    backupCount: 10
+    encoding: utf-8
+  
+  error_file:
+    class: logging.handlers.RotatingFileHandler
+    level: ERROR
+    formatter: detailed
+    filename: logs/errors.log
+    maxBytes: 10MB
+    backupCount: 5
+    encoding: utf-8
+  
+  performance_file:
+    class: logging.handlers.RotatingFileHandler
+    level: INFO
+    formatter: performance
+    filename: logs/performance.json
+    maxBytes: 50MB
+    backupCount: 5
+    encoding: utf-8
+  
+  # Syslog handler for production
+  syslog:
+    class: logging.handlers.SysLogHandler
+    level: WARNING
+    formatter: json
+    address: ['localhost', 514]
+  
+  # Email handler for critical errors
+  email:
+    class: logging.handlers.SMTPHandler
+    level: CRITICAL
+    formatter: standard
+    mailhost: ['localhost', 25]
+    fromaddr: 'probneural-alerts@example.com'
+    toaddrs: ['admin@example.com']
+    subject: 'ProbNeural Critical Error'
+
+# Custom logger for ML-specific events
+loggers:
+  probneural_operator:
+    level: DEBUG
+    handlers: [console, file, json_file, error_file]
+    propagate: false
+  
+  probneural_operator.models:
+    level: DEBUG
+    handlers: [console, file, json_file]
+    propagate: false
+  
+  probneural_operator.posteriors:
+    level: DEBUG
+    handlers: [console, file, json_file]
+    propagate: false
+  
+  probneural_operator.active:
+    level: INFO
+    handlers: [console, file, json_file]
+    propagate: false
+  
+  probneural_operator.calibration:
+    level: INFO
+    handlers: [console, file, json_file]
+    propagate: false
+  
+  probneural_operator.scaling:
+    level: WARNING
+    handlers: [console, file, json_file]
+    propagate: false
+  
+  probneural_operator.utils.performance:
+    level: INFO
+    handlers: [performance_file]
+    propagate: false
+  
+  # Third-party library loggers
+  torch:
+    level: WARNING
+    handlers: [console, file]
+    propagate: false
+  
+  matplotlib:
+    level: ERROR
+    handlers: [error_file]
+    propagate: false
+  
+  urllib3:
+    level: WARNING
+    handlers: [file]
+    propagate: false
+  
+  # Security-related logging
+  security:
+    level: INFO
+    handlers: [console, json_file, syslog]
+    propagate: false
+  
+  # Audit logging
+  audit:
+    level: INFO
+    handlers: [json_file, syslog]
+    propagate: false
+
+# Root logger configuration
+root:
+  level: INFO
+  handlers: [console, file]
+
+# Environment-specific configurations
+development:
+  handlers:
+    console:
+      level: DEBUG
+    file:
+      level: DEBUG
+  loggers:
+    probneural_operator:
+      level: DEBUG
+
+production:
+  handlers:
+    console:
+      level: WARNING
+    file:
+      level: INFO
+    syslog:
+      level: WARNING
+    email:
+      level: CRITICAL
+  loggers:
+    probneural_operator:
+      level: INFO
+  root:
+    level: WARNING
+
+testing:
+  handlers:
+    console:
+      level: ERROR
+    file:
+      level: DEBUG
+  loggers:
+    probneural_operator:
+      level: DEBUG
+  disable_existing_loggers: true

@@ -1,0 +1,227 @@
+{
+  "dashboards": [
+    {
+      "id": "probneural-operator-overview",
+      "title": "ProbNeural Operator Lab - Overview",
+      "tags": ["probneural", "overview"],
+      "templating": {
+        "list": [
+          {
+            "name": "instance",
+            "type": "query",
+            "query": "label_values(up, instance)",
+            "current": {
+              "value": "All",
+              "text": "All"
+            }
+          }
+        ]
+      },
+      "panels": [
+        {
+          "title": "System Health",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "up{instance=~\"$instance\"}",
+              "legendFormat": "{{instance}}"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+        },
+        {
+          "title": "Request Rate",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "rate(http_requests_total{instance=~\"$instance\"}[5m])",
+              "legendFormat": "{{method}} {{status}}"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+        },
+        {
+          "title": "Response Time",
+          "type": "graph", 
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{instance=~\"$instance\"}[5m]))",
+              "legendFormat": "95th percentile"
+            },
+            {
+              "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{instance=~\"$instance\"}[5m]))",
+              "legendFormat": "50th percentile"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+        },
+        {
+          "title": "Memory Usage",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "process_resident_memory_bytes{instance=~\"$instance\"} / (1024*1024)",
+              "legendFormat": "RSS Memory (MB)"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+        },
+        {
+          "title": "CPU Usage",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "rate(process_cpu_seconds_total{instance=~\"$instance\"}[5m]) * 100",
+              "legendFormat": "CPU Usage (%)"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+        }
+      ]
+    },
+    {
+      "id": "probneural-operator-ml-metrics",
+      "title": "ProbNeural Operator Lab - ML Metrics",
+      "tags": ["probneural", "ml", "uncertainty"],
+      "panels": [
+        {
+          "title": "Model Accuracy",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "model_accuracy",
+              "legendFormat": "Current Accuracy"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+        },
+        {
+          "title": "Uncertainty Calibration Error", 
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "uncertainty_calibration_error",
+              "legendFormat": "Calibration Error"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0}
+        },
+        {
+          "title": "Prediction Confidence",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "avg(prediction_confidence)",
+              "legendFormat": "Avg Confidence"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0}
+        },
+        {
+          "title": "Model Performance Trend",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "model_accuracy",
+              "legendFormat": "Accuracy"
+            },
+            {
+              "expr": "model_precision",
+              "legendFormat": "Precision"
+            },
+            {
+              "expr": "model_recall", 
+              "legendFormat": "Recall"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+        },
+        {
+          "title": "Uncertainty Distribution",
+          "type": "histogram",
+          "targets": [
+            {
+              "expr": "prediction_uncertainty_bucket",
+              "legendFormat": "Uncertainty Distribution"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+        },
+        {
+          "title": "Active Learning Metrics",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "active_learning_queries_total",
+              "legendFormat": "Total Queries"
+            },
+            {
+              "expr": "rate(active_learning_queries_total[5m])",
+              "legendFormat": "Query Rate"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+        }
+      ]
+    },
+    {
+      "id": "probneural-operator-infrastructure",
+      "title": "ProbNeural Operator Lab - Infrastructure",
+      "tags": ["probneural", "infrastructure"],
+      "panels": [
+        {
+          "title": "GPU Memory Usage",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "nvidia_gpu_memory_used_bytes / nvidia_gpu_memory_total_bytes * 100",
+              "legendFormat": "GPU {{gpu}} Memory Usage (%)"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+        },
+        {
+          "title": "GPU Temperature",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "nvidia_gpu_temperature_celsius",
+              "legendFormat": "GPU {{gpu}} Temperature (°C)"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+        },
+        {
+          "title": "Disk I/O",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "rate(node_disk_reads_completed_total[5m])",
+              "legendFormat": "Disk Reads/sec"
+            },
+            {
+              "expr": "rate(node_disk_writes_completed_total[5m])",
+              "legendFormat": "Disk Writes/sec"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+        },
+        {
+          "title": "Network I/O",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "rate(node_network_receive_bytes_total[5m])",
+              "legendFormat": "Network In"
+            },
+            {
+              "expr": "rate(node_network_transmit_bytes_total[5m])",
+              "legendFormat": "Network Out"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+        }
+      ]
+    }
+  ]
+}
