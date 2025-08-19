@@ -2,7 +2,7 @@
 
 import math
 from abc import ABC, abstractmethod
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple
 
 import torch
 import torch.nn as nn
