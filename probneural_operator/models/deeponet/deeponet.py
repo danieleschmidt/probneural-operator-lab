@@ -4,7 +4,7 @@ from typing import Optional, Tuple, List
 import torch
 import torch.nn as nn
 
-from ..base import NeuralOperator, ProbabilisticNeuralOperator
+from probneural_operator.models.base import NeuralOperator, ProbabilisticNeuralOperator
 
 
 class DeepONet(NeuralOperator):

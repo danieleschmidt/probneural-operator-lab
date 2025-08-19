@@ -85,10 +85,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..base import NeuralOperator, ProbabilisticNeuralOperator
-from ..base.layers import SpectralLayer, FeedForwardLayer, LiftProjectLayer
-from ...utils.validation import validate_tensor_shape, validate_tensor_finite
-from ...utils.exceptions import ModelInitializationError, ModelTrainingError
+from probneural_operator.models.base import NeuralOperator, ProbabilisticNeuralOperator
+from probneural_operator.models.base.layers import SpectralLayer, FeedForwardLayer, LiftProjectLayer
+from probneural_operator.utils.validation import validate_tensor_shape, validate_tensor_finite
+from probneural_operator.utils.exceptions import ModelInitializationError, ModelTrainingError
 
 logger = logging.getLogger(__name__)
 

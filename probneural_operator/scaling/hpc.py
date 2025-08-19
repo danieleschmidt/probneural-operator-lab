@@ -1016,28 +1016,6 @@ def estimate_hpc_costs(model_config: Dict[str, Any],
         'total_gpu_hours': total_gpu_hours,
         'estimated_config': config.__dict__
     }
-        
-        try:
-            result = subprocess.run(
-                ['scancel', job_id],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
-            success = result.returncode == 0
-            if success:
-                logging.info(f"Cancelled job {job_id}")
-                if job_id in self._active_jobs:
-                    del self._active_jobs[job_id]
-            else:
-                logging.error(f"Failed to cancel job {job_id}: {result.stderr}")
-            
-            return success
-        
-        except Exception as e:
-            logging.error(f"Error cancelling job: {e}")
-            return False
 
 
 # ========== ADVANCED HPC ENHANCEMENTS ==========
@@ -2127,58 +2105,6 @@ def estimate_hpc_costs(model_config: Dict[str, Any],
         'total_gpu_hours': total_gpu_hours,
         'estimated_config': config.__dict__
     }
-        
-        try:
-            # Initialize PyTorch distributed with MPI
-            if 'OMPI_COMM_WORLD_RANK' in os.environ:
-                # Open MPI
-                self.rank = int(os.environ['OMPI_COMM_WORLD_RANK'])
-                self.world_size = int(os.environ['OMPI_COMM_WORLD_SIZE'])
-                local_rank = int(os.environ.get('OMPI_COMM_WORLD_LOCAL_RANK', '0'))
-            elif 'PMI_RANK' in os.environ:
-                # Intel MPI
-                self.rank = int(os.environ['PMI_RANK'])
-                self.world_size = int(os.environ['PMI_SIZE'])
-                local_rank = int(os.environ.get('MPI_LOCALRANKID', '0'))
-            else:
-                # Fallback
-                self.rank = 0
-                self.world_size = 1
-                local_rank = 0
-            
-            # Set up distributed training
-            if self.world_size > 1:
-                # Find master address
-                if self.rank == 0:
-                    master_addr = socket.gethostname()
-                    master_port = "12355"
-                else:
-                    # Get from environment or default
-                    master_addr = os.environ.get('MASTER_ADDR', 'localhost')
-                    master_port = os.environ.get('MASTER_PORT', '12355')
-                
-                os.environ['MASTER_ADDR'] = master_addr
-                os.environ['MASTER_PORT'] = master_port
-                
-                # Initialize process group
-                dist.init_process_group(
-                    backend='nccl' if torch.cuda.is_available() else 'gloo',
-                    rank=self.rank,
-                    world_size=self.world_size
-                )
-                
-                # Set CUDA device
-                if torch.cuda.is_available():
-                    torch.cuda.set_device(local_rank % torch.cuda.device_count())
-                
-                self.is_initialized = True
-                
-                logging.info(f"MPI initialized: rank {self.rank}/{self.world_size}")
-                return True
-        
-        except Exception as e:
-            logging.error(f"MPI initialization failed: {e}")
-            return False
 
 
 # ========== ADVANCED HPC ENHANCEMENTS ==========
@@ -2493,8 +2419,6 @@ def estimate_hpc_costs(model_config: Dict[str, Any],
         'total_gpu_hours': total_gpu_hours,
         'estimated_config': config.__dict__
     }
-        
-        return False
 
 
 # ========== ADVANCED HPC ENHANCEMENTS ==========
@@ -3602,96 +3526,6 @@ def estimate_hpc_costs(model_config: Dict[str, Any],
         'total_gpu_hours': total_gpu_hours,
         'estimated_config': config.__dict__
     }
-        
-        return True
-    
-    def _start_job(self, job_info: Dict[str, Any]):
-        """Start executing a job."""
-        job_id = job_info['job_id']
-        
-        executor = ThreadPoolExecutor(max_workers=1)
-        future = executor.submit(
-            job_info['job_func'],
-            *job_info['job_args'],
-            **job_info['job_kwargs']
-        )
-        
-        job_info['future'] = future
-        job_info['executor'] = executor
-        job_info['status'] = 'running'
-        job_info['start_time'] = time.time()
-        
-        self._running_jobs[job_id] = job_info
-        logging.info(f"Started job {job_id}")
-    
-    def get_job_status(self, job_id: str) -> Optional[Dict[str, Any]]:
-        """Get job status."""
-        with self._lock:
-            # Check running jobs
-            if job_id in self._running_jobs:
-                job_info = self._running_jobs[job_id].copy()
-                job_info.pop('future', None)
-                job_info.pop('executor', None)
-                return job_info
-            
-            # Check completed jobs
-            for job_info in self._completed_jobs:
-                if job_info['job_id'] == job_id:
-                    return job_info.copy()
-            
-            # Check queued jobs
-            for job_info in self._job_queue:
-                if job_info['job_id'] == job_id:
-                    return job_info.copy()
-        
-        return None
-    
-    def get_queue_status(self) -> Dict[str, Any]:
-        """Get overall queue status."""
-        with self._lock:
-            return {
-                'queued_jobs': len(self._job_queue),
-                'running_jobs': len(self._running_jobs),
-                'completed_jobs': len(self._completed_jobs),
-                'scheduler_type': self.scheduler_type,
-                'max_concurrent_jobs': self.max_concurrent_jobs,
-                'is_running': self._is_running
-            }
-    
-    def cancel_job(self, job_id: str) -> bool:
-        """Cancel a job."""
-        with self._lock:
-            # Check if job is in queue
-            for i, job_info in enumerate(self._job_queue):
-                if job_info['job_id'] == job_id:
-                    self._job_queue.pop(i)
-                    job_info['status'] = 'cancelled'
-                    job_info['end_time'] = time.time()
-                    self._completed_jobs.append(job_info)
-                    logging.info(f"Cancelled queued job {job_id}")
-                    return True
-            
-            # Check if job is running
-            if job_id in self._running_jobs:
-                job_info = self._running_jobs.pop(job_id)
-                future = job_info['future']
-                executor = job_info['executor']
-                
-                # Try to cancel the future
-                cancelled = future.cancel()
-                
-                if not cancelled:
-                    # Force shutdown executor
-                    executor.shutdown(wait=False)
-                
-                job_info['status'] = 'cancelled'
-                job_info['end_time'] = time.time()
-                self._completed_jobs.append(job_info)
-                
-                logging.info(f"Cancelled running job {job_id}")
-                return True
-        
-        return False
 
 
 # ========== ADVANCED HPC ENHANCEMENTS ==========
