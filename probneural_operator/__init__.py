@@ -20,22 +20,44 @@ __version__ = "0.3.0"
 __author__ = "Daniel Schmidt"
 __email__ = "daniel@example.com"
 
-# Core imports for easy access
-from probneural_operator.models import (
-    ProbabilisticFNO,
-    ProbabilisticDeepONet,
-    ProbabilisticGNO
-)
-from probneural_operator.posteriors import (
-    LinearizedLaplace,
-    VariationalPosterior,
-    DeepEnsemble
-)
-from probneural_operator.active import ActiveLearner
-from probneural_operator.calibration import TemperatureScaling
+# Core imports for easy access with graceful degradation
+import warnings
+
+try:
+    from probneural_operator.models import (
+        ProbabilisticFNO,
+        ProbabilisticDeepONet,
+        ProbabilisticGNO
+    )
+except ImportError as e:
+    warnings.warn(f"Models not available: {e}", ImportWarning)
+    ProbabilisticFNO = ProbabilisticDeepONet = ProbabilisticGNO = None
+
+try:
+    from probneural_operator.posteriors import (
+        LinearizedLaplace,
+        VariationalPosterior,
+        DeepEnsemble
+    )
+except ImportError as e:
+    warnings.warn(f"Posteriors not available: {e}", ImportWarning)
+    LinearizedLaplace = VariationalPosterior = DeepEnsemble = None
+
+try:
+    from probneural_operator.active import ActiveLearner
+except ImportError as e:
+    warnings.warn(f"Active learning not available: {e}", ImportWarning)
+    ActiveLearner = None
+
+try:
+    from probneural_operator.calibration import TemperatureScaling
+except ImportError as e:
+    warnings.warn(f"Calibration not available: {e}", ImportWarning)
+    TemperatureScaling = None
 
 # Generation 3 Scaling imports
-from probneural_operator.scaling import (
+try:
+    from probneural_operator.scaling import (
     # Performance Optimization & Caching
     PredictionCache,
     TensorOperationCache,
@@ -77,59 +99,74 @@ from probneural_operator.scaling import (
     ModelVersionManager,
     InferenceOptimizer,
     ContainerManager,
-)
+    )
+except ImportError as e:
+    warnings.warn(f"Scaling modules not available: {e}", ImportWarning)
+    # Set all scaling modules to None
+    PredictionCache = TensorOperationCache = AdaptiveBatchSizer = MemoryOptimizer = None
+    MultiGPUTrainer = DistributedTrainer = ResourcePoolManager = AsyncDataLoader = None
+    AutoScaler = LoadBalancer = ResourceMonitor = ElasticBatchProcessor = None
+    AdvancedOptimizerFactory = LearningRateScheduler = GradientManager = HyperparameterOptimizer = None
+    GradientCheckpointer = MixedPrecisionManager = MemoryMappedDataset = MemoryPoolManager = None
+    SLURMIntegration = MPIDistributedTrainer = CheckpointManager = JobScheduler = None
+    ModelServer = ModelVersionManager = InferenceOptimizer = ContainerManager = None
 
-__all__ = [
-    # Core Generation 1 & 2
-    "ProbabilisticFNO",
-    "ProbabilisticDeepONet", 
-    "ProbabilisticGNO",
-    "LinearizedLaplace",
-    "VariationalPosterior",
-    "DeepEnsemble",
-    "ActiveLearner",
-    "TemperatureScaling",
+# Utility functions
+def get_version():
+    """Get package version."""
+    return __version__
+
+def check_dependencies():
+    """Check which dependencies are available."""
+    deps = {}
     
-    # Generation 3 Scaling Features
-    # Performance Optimization & Caching
-    "PredictionCache",
-    "TensorOperationCache", 
-    "AdaptiveBatchSizer",
-    "MemoryOptimizer",
+    try:
+        import torch
+        deps['torch'] = torch.__version__
+    except ImportError:
+        deps['torch'] = None
     
-    # Concurrent Processing & Resource Pooling
-    "MultiGPUTrainer",
-    "DistributedTrainer",
-    "ResourcePoolManager",
-    "AsyncDataLoader",
+    try:
+        import numpy
+        deps['numpy'] = numpy.__version__
+    except ImportError:
+        deps['numpy'] = None
+        
+    try:
+        import scipy
+        deps['scipy'] = scipy.__version__
+    except ImportError:
+        deps['scipy'] = None
     
-    # Auto-Scaling & Load Balancing
-    "AutoScaler",
-    "LoadBalancer", 
-    "ResourceMonitor",
-    "ElasticBatchProcessor",
-    
-    # Advanced Optimization Algorithms
-    "AdvancedOptimizerFactory",
-    "LearningRateScheduler",
-    "GradientManager",
-    "HyperparameterOptimizer",
-    
-    # Memory Management & Resource Optimization
-    "GradientCheckpointer",
-    "MixedPrecisionManager",
-    "MemoryMappedDataset",
-    "MemoryPoolManager",
-    
-    # High-Performance Computing Integration
-    "SLURMIntegration",
-    "MPIDistributedTrainer",
-    "CheckpointManager",
-    "JobScheduler",
-    
-    # Production Deployment & Serving
-    "ModelServer",
-    "ModelVersionManager",
-    "InferenceOptimizer",
-    "ContainerManager",
+    return deps
+
+# Build dynamic __all__ based on what's available
+__all__ = ["get_version", "check_dependencies"]
+
+# Add available modules to __all__
+if ProbabilisticFNO is not None:
+    __all__.extend(["ProbabilisticFNO", "ProbabilisticDeepONet", "ProbabilisticGNO"])
+
+if LinearizedLaplace is not None:
+    __all__.extend(["LinearizedLaplace", "VariationalPosterior", "DeepEnsemble"])
+
+if ActiveLearner is not None:
+    __all__.append("ActiveLearner")
+
+if TemperatureScaling is not None:
+    __all__.append("TemperatureScaling")
+
+# Add scaling modules if available
+scaling_modules = [
+    "PredictionCache", "TensorOperationCache", "AdaptiveBatchSizer", "MemoryOptimizer",
+    "MultiGPUTrainer", "DistributedTrainer", "ResourcePoolManager", "AsyncDataLoader",
+    "AutoScaler", "LoadBalancer", "ResourceMonitor", "ElasticBatchProcessor",
+    "AdvancedOptimizerFactory", "LearningRateScheduler", "GradientManager", "HyperparameterOptimizer",
+    "GradientCheckpointer", "MixedPrecisionManager", "MemoryMappedDataset", "MemoryPoolManager",
+    "SLURMIntegration", "MPIDistributedTrainer", "CheckpointManager", "JobScheduler",
+    "ModelServer", "ModelVersionManager", "InferenceOptimizer", "ContainerManager"
 ]
+
+for module in scaling_modules:
+    if globals().get(module) is not None:
+        __all__.append(module)
