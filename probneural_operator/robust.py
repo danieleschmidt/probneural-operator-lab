@@ -387,15 +387,26 @@ class SecurityManager:
         if len(sanitized) > max_length:
             sanitized = sanitized[:max_length]
         
-        # Remove potentially dangerous patterns
+        # Remove potentially dangerous patterns (case-insensitive)
         dangerous_patterns = [
             'DROP TABLE', 'DELETE FROM', 'INSERT INTO', 'UPDATE SET',
             '<script>', '</script>', 'javascript:', 'vbscript:',
-            '$(', '`', '||', '&&'
+            '$(', '`', '||', '&&', 'rm -rf', 'eval(', 'exec('
         ]
         
+        sanitized_upper = sanitized.upper()
         for pattern in dangerous_patterns:
-            sanitized = sanitized.replace(pattern, '')
+            pattern_upper = pattern.upper()
+            if pattern_upper in sanitized_upper:
+                # Replace case-insensitively
+                start_idx = 0
+                while True:
+                    idx = sanitized_upper.find(pattern_upper, start_idx)
+                    if idx == -1:
+                        break
+                    sanitized = sanitized[:idx] + sanitized[idx + len(pattern):]
+                    sanitized_upper = sanitized.upper()
+                    start_idx = idx
         
         return sanitized
     
