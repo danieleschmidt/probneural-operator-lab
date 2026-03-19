@@ -21,7 +21,7 @@ from .validation import (
     validate_tensor_shape, validate_tensor_finite, validate_tensor_dtype,
     ValidationError
 )
-from .exceptions import SecurityError, MemoryError as FrameworkMemoryError
+from .exceptions import MemoryError as FrameworkMemoryError
 
 logger = logging.getLogger(__name__)
 
